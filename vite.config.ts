@@ -15,4 +15,13 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  test: {
+    environment: "happy-dom",
+    globals: true,
+    setupFiles: "./tests/setup.ts",
+    include: ["tests/**/*.test.{ts,tsx}"],
+    pool: "forks",
+    threads: false,
+    singleThread: true,
+  },
 }));

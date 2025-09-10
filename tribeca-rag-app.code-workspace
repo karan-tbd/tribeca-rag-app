@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../../augment-projects/RAGChat/docs"
+		},
+		{
+			"path": "../../augment-projects/RAGChat/scripts"
+		}
+	],
+	"settings": {}
+}
