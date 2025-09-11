@@ -13,6 +13,7 @@ import Agents from "./pages/Agents";
 import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
 import Documents from "./pages/Documents";
+import Chat from "./pages/Chat";
 
 const queryClient = new QueryClient();
 
@@ -63,6 +64,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Documents />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/chat"
+              element={
+                <ProtectedRoute>
+                  <Chat />
                 </ProtectedRoute>
               }
             />

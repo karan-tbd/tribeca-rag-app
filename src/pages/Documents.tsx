@@ -8,7 +8,7 @@ import { toast } from "@/hooks/use-toast";
 
 export default function Documents() {
   const { user } = useAuth();
-  const [documents, setDocuments] = useState<Array<{ id: string; title: string; created_at: string }>>([]);
+  const [documents, setDocuments] = useState<Array<{ id: string; title: string; created_at: string; agent: { name: string } }>>([]);
   const [agents, setAgents] = useState<Array<{ id: string; name: string }>>([]);
   const [agentId, setAgentId] = useState<string>("");
   const [file, setFile] = useState<File | null>(null);
@@ -21,7 +21,7 @@ export default function Documents() {
     (async () => {
       const { data: docs } = await supabase
         .from("documents")
-        .select("id, title, created_at")
+        .select("id, title, created_at, agent:agents(name)")
         .order("created_at", { ascending: false });
       setDocuments(docs ?? []);
 
@@ -51,19 +51,30 @@ export default function Documents() {
       if (sErr) throw sErr;
 
       const title = file.name.replace(/\.[^.]+$/, "");
-      const { error: iErr } = await supabase.from("documents").insert({
+      const { data, error: iErr } = await supabase.from("documents").insert({
         user_id: user.id,
         agent_id: agentId,
         storage_path: path,
         title,
         mime: file.type || "application/pdf",
-      });
+      }).select().single();
       if (iErr) throw iErr;
       toast({ title: "Uploaded", description: `${file.name} uploaded.` });
 
+      // Trigger document processing
+      try {
+        await supabase.functions.invoke('process-document', {
+          body: { documentId: data.id }
+        });
+        toast({ title: "Processing", description: "Document is being processed for search." });
+      } catch (processError) {
+        console.error('Processing failed:', processError);
+        toast({ title: "Warning", description: "Upload succeeded but processing failed." });
+      }
+
       const { data: docs } = await supabase
         .from("documents")
-        .select("id, title, created_at")
+        .select("id, title, created_at, agent:agents(name)")
         .order("created_at", { ascending: false });
       setDocuments(docs ?? []);
       setFile(null);
@@ -111,7 +122,10 @@ export default function Documents() {
             <ul className="divide-y border rounded">
               {documents.map((d) => (
                 <li key={d.id} className="p-3 text-sm flex items-center justify-between">
-                  <span>{d.title}</span>
+                  <div>
+                    <div className="font-medium">{d.title}</div>
+                    <div className="text-muted-foreground text-xs">Agent: {d.agent?.name || 'Unknown'}</div>
+                  </div>
                   <span className="text-muted-foreground">{new Date(d.created_at).toLocaleString()}</span>
                 </li>
               ))}

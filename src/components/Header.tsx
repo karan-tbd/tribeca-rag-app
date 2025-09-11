@@ -29,6 +29,7 @@ export default function Header() {
           <Link to="/dashboard" className="font-semibold">Tribeca</Link>
           <Link to="/agents" className="text-muted-foreground hover:text-foreground">Agents</Link>
           <Link to="/documents" className="text-muted-foreground hover:text-foreground">Documents</Link>
+          <Link to="/chat" className="text-muted-foreground hover:text-foreground">Chat</Link>
           <Link to="/profile" className="text-muted-foreground hover:text-foreground">Profile</Link>
         </nav>
         <div className="flex items-center gap-3">
