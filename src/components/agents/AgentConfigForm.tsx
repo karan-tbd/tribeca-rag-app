@@ -9,38 +9,61 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
-export default function AgentConfigForm() {
+interface AgentConfigFormProps {
+  agentId?: string | null;
+  onSave?: () => void;
+}
+
+export default function AgentConfigForm({ agentId: propAgentId, onSave }: AgentConfigFormProps) {
   const { user } = useAuth();
-  const [agentId, setAgentId] = useState<string | null>(null);
+  const [agentId, setAgentId] = useState<string | null>(propAgentId || null);
   const form = useForm<AgentFormValues>({ resolver: zodResolver(agentSchema), defaultValues: { k: 5, sim_threshold: 0.75, fail_safe_threshold: 0.5 } });
 
   useEffect(() => {
+    setAgentId(propAgentId || null);
+    
     if (!user) return;
-    (async () => {
-      const { data, error } = await supabase
-        .from("agents")
-        .select("*")
-        .eq("user_id", user.id)
-        .limit(1)
-        .maybeSingle();
-      if (error) {
-        console.error(error);
-      } else if (data) {
-        setAgentId(data.id);
-        form.reset({
-          name: data.name,
-          description: data.description ?? "",
-          system_prompt: data.system_prompt ?? "",
-          query_template: data.query_template ?? "",
-          embed_model: data.embed_model ?? "text-embedding-3-small",
-          gen_model: data.gen_model ?? "gpt-4o-mini",
-          k: data.k ?? 5,
-          sim_threshold: data.sim_threshold ?? 0.75,
-          fail_safe_threshold: data.fail_safe_threshold ?? 0.5,
-        });
-      }
-    })();
-  }, [user]);
+    
+    if (propAgentId) {
+      // Load specific agent
+      (async () => {
+        const { data, error } = await supabase
+          .from("agents")
+          .select("*")
+          .eq("id", propAgentId)
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (error) {
+          console.error(error);
+        } else if (data) {
+          form.reset({
+            name: data.name,
+            description: data.description ?? "",
+            system_prompt: data.system_prompt ?? "",
+            query_template: data.query_template ?? "",
+            embed_model: data.embed_model ?? "text-embedding-3-small",
+            gen_model: data.gen_model ?? "gpt-4o-mini",
+            k: data.k ?? 5,
+            sim_threshold: data.sim_threshold ?? 0.75,
+            fail_safe_threshold: data.fail_safe_threshold ?? 0.5,
+          });
+        }
+      })();
+    } else {
+      // Reset form for new agent
+      form.reset({
+        name: "",
+        description: "",
+        system_prompt: "",
+        query_template: "",
+        embed_model: "text-embedding-3-small",
+        gen_model: "gpt-4o-mini",
+        k: 5,
+        sim_threshold: 0.75,
+        fail_safe_threshold: 0.5,
+      });
+    }
+  }, [user, propAgentId, form]);
 
   const onSubmit = async (values: AgentFormValues) => {
     if (!user) return;
@@ -58,6 +81,7 @@ export default function AgentConfigForm() {
     } else {
       setAgentId(data.id);
       toast.success("Agent saved");
+      onSave?.();
     }
   };
 

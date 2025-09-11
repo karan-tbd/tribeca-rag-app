@@ -4,13 +4,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
+import AgentConfigForm from "@/components/agents/AgentConfigForm";
 
 export default function Agents() {
   const { user } = useAuth();
   const [agents, setAgents] = useState<Array<{ id: string; name: string; updated_at: string | null }>>([]);
-  const [name, setName] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
 
   const loadAgents = async () => {
     const { data, error } = await supabase
@@ -19,6 +21,11 @@ export default function Agents() {
       .order("updated_at", { ascending: false });
     if (error) toast({ title: "Failed to load agents", description: error.message });
     setAgents(data ?? []);
+    
+    // Auto-select first agent if none selected
+    if (data && data.length > 0 && !selectedAgentId) {
+      setSelectedAgentId(data[0].id);
+    }
   };
 
   useEffect(() => {
@@ -26,37 +33,14 @@ export default function Agents() {
     loadAgents();
   }, [user]);
 
-  const createAgent = async () => {
-    if (!user || !name.trim()) return;
-    try {
-      setSaving(true);
-      const { error } = await supabase.from("agents").insert({ user_id: user.id, name: name.trim() });
-      if (error) throw error;
-      setName("");
-      await loadAgents();
-      toast({ title: "Agent created" });
-    } catch (e: any) {
-      toast({ title: "Create failed", description: e?.message ?? "RLS denied or invalid input." });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const updateAgent = async (id: string, newName: string) => {
-    try {
-      const { error } = await supabase.from("agents").update({ name: newName }).eq("id", id);
-      if (error) throw error;
-      await loadAgents();
-      toast({ title: "Agent updated" });
-    } catch (e: any) {
-      toast({ title: "Update failed", description: e?.message ?? "Not accessible" });
-    }
-  };
-
   const deleteAgent = async (id: string) => {
     try {
       const { error } = await supabase.from("agents").delete().eq("id", id);
       if (error) throw error;
+      
+      if (selectedAgentId === id) {
+        setSelectedAgentId(null);
+      }
       await loadAgents();
       toast({ title: "Agent deleted" });
     } catch (e: any) {
@@ -64,64 +48,81 @@ export default function Agents() {
     }
   };
 
+  const createNewAgent = () => {
+    setSelectedAgentId(null);
+  };
+
   return (
     <div>
       <Header />
-      <main className="mx-auto max-w-3xl p-6 space-y-6">
-        <h1 className="text-2xl font-semibold">Agents</h1>
-        <div className="flex gap-2 items-center">
-          <Input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Agent name"
-            className="max-w-xs"
-          />
-          <Button onClick={createAgent} disabled={!name.trim() || saving}>{saving ? "Saving…" : "Create"}</Button>
+      <main className="mx-auto max-w-6xl p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold">Agent Configuration</h1>
+          <Button onClick={createNewAgent}>New Agent</Button>
         </div>
-        <div className="space-y-2">
-          <h2 className="text-lg font-medium">Your agents</h2>
-          {agents.length === 0 ? (
-            <div className="text-sm text-muted-foreground">No agents yet.</div>
-          ) : (
-            <ul className="divide-y border rounded">
-              {agents.map((a) => (
-                <AgentRow key={a.id} id={a.id} name={a.name} updated_at={a.updated_at} onSave={updateAgent} onDelete={deleteAgent} />
-              ))}
-            </ul>
-          )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Agent List Sidebar */}
+          <Card className="lg:col-span-1">
+            <CardHeader>
+              <CardTitle className="text-lg">Your Agents</CardTitle>
+              <CardDescription>Select an agent to configure</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {agents.length === 0 ? (
+                <div className="text-sm text-muted-foreground">No agents yet.</div>
+              ) : (
+                agents.map((agent) => (
+                  <div
+                    key={agent.id}
+                    className={`p-3 rounded border cursor-pointer transition-colors hover:bg-muted/50 ${
+                      selectedAgentId === agent.id ? "bg-muted border-primary" : ""
+                    }`}
+                    onClick={() => setSelectedAgentId(agent.id)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium truncate">{agent.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {agent.updated_at ? new Date(agent.updated_at).toLocaleDateString() : ""}
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteAgent(agent.id);
+                        }}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        ×
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Agent Configuration Form */}
+          <Card className="lg:col-span-3">
+            <CardHeader>
+              <CardTitle>{selectedAgentId ? "Configure Agent" : "Create New Agent"}</CardTitle>
+              <CardDescription>
+                Set up your agent's behavior, prompts, and model preferences
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <AgentConfigForm 
+                key={selectedAgentId || "new"} 
+                agentId={selectedAgentId}
+                onSave={() => loadAgents()}
+              />
+            </CardContent>
+          </Card>
         </div>
       </main>
     </div>
   );
 }
-
-function AgentRow({ id, name, updated_at, onSave, onDelete }: { id: string; name: string; updated_at: string | null; onSave: (id: string, name: string) => void; onDelete: (id: string) => void; }) {
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(name);
-  return (
-    <li className="p-3 text-sm flex items-center justify-between gap-2">
-      <div className="flex items-center gap-3 min-w-0">
-        {editing ? (
-          <Input value={value} onChange={(e) => setValue(e.target.value)} className="max-w-sm" />
-        ) : (
-          <span className="truncate">{name}</span>
-        )}
-        <span className="text-muted-foreground">{updated_at ? new Date(updated_at).toLocaleString() : ""}</span>
-      </div>
-      <div className="flex items-center gap-2">
-        {editing ? (
-          <>
-            <Button size="sm" onClick={() => { onSave(id, value.trim()); setEditing(false); }}>Save</Button>
-            <Button size="sm" variant="outline" onClick={() => { setValue(name); setEditing(false); }}>Cancel</Button>
-          </>
-        ) : (
-          <>
-            <Button size="sm" variant="outline" onClick={() => setEditing(true)}>Edit</Button>
-            <Button size="sm" variant="destructive" onClick={() => onDelete(id)}>Delete</Button>
-          </>
-        )}
-      </div>
-    </li>
-  );
-}
-
