@@ -1,0 +1,513 @@
+Here’s a **collated PRD** for your RAG framework app with **session memory** and **Linear project management integration** included in v1. It’s cleaned, structured, and ready to share with engineers or collaborators.
+
+---
+
+# 📄 PRD: RAG Framework App (v1)
+
+---
+
+## 1. Problem & Goals
+
+**Problem:**
+Internal teams need a robust way to query their documents conversationally, with accurate grounding and confidence scoring. Current solutions don’t allow customization of prompts, session-level memory, logging for analysis, or integrated project management for tracking development progress.
+
+**Goals (v1):**
+
+1. Upload and query PDFs with document versioning.
+2. Provide a **chat-style interface** with **session memory**.
+3. Support configurable **system prompts** and query templates per user/agent.
+4. Display answers with **confidence scoring (0–1)**, **citations**, and **fail-safe** when confidence is low.
+5. Persist queries, responses, and evals for **dashboards and auditing**.
+6. **Integrated Linear project management** for tracking development tasks, sprints, and milestones.
+7. Modular architecture: swap LLMs/embeddings, extend to multi-agent and tools later.
+
+---
+
+## 2. Users & Use Cases
+
+* **Users:** Internal PMs, engineers, analysts, project managers.
+* **Use cases:**
+  * Q&A against PDFs (knowledge retrieval).
+  * Customize agents with different prompts.
+  * Audit answers and evaluate grounding.
+  * **Track development progress and sprint planning**.
+  * **Monitor project health and issue resolution**.
+
+---
+
+## 3. Scope (Functional Requirements)
+
+### Auth & Accounts
+
+* Google Sign-In (Supabase Auth).
+* Profile stored in Supabase.
+* **Linear API integration** for project access.
+
+### Agents
+
+* **Single agent per user (v1)**.
+* Configurable: name, description, system prompt, query template, models, retrieval params (k, threshold).
+
+### Documents
+
+* Upload PDFs (≤50MB) with **re-embed checkbox** (default: embed only net-new content).
+* Parse → chunk (500–800 tokens, 10–15% overlap) → embed (OpenAI) → store in Pinecone.
+* Document versioning (latest version default, past versions retained).
+* **Documents tied to agents** (agent → user hierarchy).
+
+### Sessions & Memory
+
+* Chats run in **sessions**.
+* Each turn builds prompt from (8K token budget):
+  * System Prompt (~200-400 tokens)
+  * **Running summary** (~200-300 tokens, facts-only from cited content)
+  * **Last K turns** (~2000-3000 tokens, default K=6)
+  * RAG context excerpts (~3000-4000 tokens)
+  * User query (~100-200 tokens)
+  * Buffer (~500 tokens)
+* Reset context button: creates new session, adds termination summary to old session.
+* Summary updated only when new cited information is provided.
+
+### Q&A Flow
+
+* Stateless endpoint available (`/query_rag`), but UI uses session-based `/send_message`.
+* Answers always include citations.
+* Confidence shown if `<0.8`.
+* Fail-safe if `<0.5`: “I don’t have enough evidence in the documents to answer confidently.”
+* Confidence thresholds (configurable per agent):
+  * ≥0.8 → no display.
+  * 0.5–0.79 → show footer.
+  * <fail_safe_threshold → fail-safe response.
+
+### Evals
+
+* Heuristics: max\_sim, mean\_sim, %chunks above threshold.
+* Inline LLM judge (faithfulness 0–1).
+* Aggregate confidence = weighted sum.
+* Stored in Supabase with rationale.
+
+### Linear Project Management Integration
+
+* **Project Dashboard**: Real-time view of Linear project status
+  * Sprint progress (current/completed/planned)
+  * Issue breakdown by epic, status, and assignee
+  * Velocity tracking and burndown charts
+  * Risk assessment (high-risk issues flagged)
+* **Issue Management**:
+  * Create/update issues directly from app
+  * Link issues to specific features or bugs
+  * Automated issue creation from error logs
+  * Status synchronization with Linear webhooks
+* **Sprint Planning**:
+  * Sprint creation and management
+  * Issue assignment and estimation
+  * Sprint goal tracking and completion metrics
+* **Reporting & Analytics**:
+  * Development velocity trends
+  * Issue resolution time analysis
+  * Epic completion tracking
+  * Team productivity metrics
+
+### Dashboard
+
+* **RAG Stats**:
+  * #messages received/sent.
+  * %correctness (confidence ≥0.8).
+  * Top failed queries (<0.5).
+  * Queries per day (time series).
+  * Avg tokens/turn, latency (p50/p95).
+* **Project Stats**:
+  * Sprint progress and velocity
+  * Issues by status and priority
+  * Epic completion percentage
+  * Development timeline adherence
+  * Risk indicators and blockers
+
+### Logging
+
+* Log queries, answers, evals, tokens, latency.
+* **Log Linear API interactions and project events**.
+* Manual purge by user/admin.
+
+---
+
+## 4. Non-Goals (future versions)
+
+* Multi-agent per user.
+* Tool use/function calling.
+* External sync (Google Drive, Notion).
+* Multi-tenant orgs/workspaces.
+* **Advanced Linear features** (custom workflows, advanced reporting).
+
+---
+
+## 5. Defaults
+
+* Embeddings: `text-embedding-3-small` (default).
+* LLM: `gpt-4o-mini` (default).
+* Retrieval: k=5, similarity threshold=0.75.
+* Confidence thresholds:
+
+  * ≥0.8 → no display.
+  * 0.5–0.79 → show footer.
+  * <0.5 → fail-safe response.
+* **Linear Project**: "RAG Framework App v1" with 6-week timeline.
+
+---
+
+## 6. System Architecture
+
+**Frontend (react / Vercel)**
+
+* Pages: Login, Agent Config, Document Manager, Chat, Dashboard, **Project Management**.
+
+**Backend (Supabase Edge Functions)**
+
+* `ingest_pdf`: parse, chunk, embed, upsert vectors, log metadata.
+* `send_message`: assemble prompt (summary+lastK+RAG), call LLM, eval, log.
+* `start_session`, `reset_context`, `delete_session`.
+* **Linear Integration**:
+  * `sync_linear_project`: fetch project data, issues, sprints
+  * `create_linear_issue`: create issues from app
+  * `update_issue_status`: sync status changes
+  * `webhook_handler`: process Linear webhooks
+
+**Vector DB (Pinecone)**
+
+* Index per env.
+* Namespace = `user_id:agent_id`.
+* Metadata: doc\_id, version, page, chunk\_index.
+
+**Storage (Supabase)**
+
+* PDFs → Supabase Storage.
+* Metadata, logs, sessions → Postgres.
+* **Linear project data cache** → Postgres.
+
+**External APIs**
+
+* **Linear API**: Project management integration
+* OpenAI: Embeddings + GPT models by default
+* Extendable to Anthropic/Mistral later
+
+---
+
+## 7. Data Model (Schema)
+
+```sql
+-- users
+create table users (
+  id uuid primary key default gen_random_uuid(),
+  email text unique not null,
+  name text,
+  avatar_url text,
+  linear_api_token text,
+  created_at timestamptz default now()
+);
+
+-- agents (updated)
+create table agents (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references users(id),
+  name text,
+  description text,
+  system_prompt text,
+  query_template text,
+  embed_model text,
+  gen_model text,
+  k int default 5,
+  sim_threshold float default 0.75,
+  fail_safe_threshold float default 0.5,
+  config_version int default 1,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- documents & versions
+create table documents (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references users(id),
+  agent_id uuid references agents(id),
+  title text,
+  storage_path text,
+  mime text,
+  latest_version int,
+  created_at timestamptz default now()
+);
+
+create table document_versions (
+  id uuid primary key default gen_random_uuid(),
+  document_id uuid references documents(id),
+  version_no int,
+  checksum text,
+  created_at timestamptz default now()
+);
+
+-- chunks (metadata only)
+create table chunks (
+  id uuid primary key default gen_random_uuid(),
+  document_id uuid references documents(id),
+  version_id uuid references document_versions(id),
+  page_start int,
+  page_end int,
+  chunk_index int,
+  token_count int,
+  created_at timestamptz default now()
+);
+
+-- sessions & messages
+create table sessions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references users(id),
+  agent_id uuid references agents(id),
+  title text,
+  created_at timestamptz default now()
+);
+
+create table messages (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid references sessions(id),
+  role text check (role in ('user','assistant','system')),
+  content text,
+  token_in int,
+  token_out int,
+  created_at timestamptz default now()
+);
+
+-- session_summaries (updated)
+create table session_summaries (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid unique references sessions(id),
+  summary_text text,
+  is_termination_summary boolean default false,
+  updated_at timestamptz default now()
+);
+
+-- queries, answers, evals
+create table queries (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid references sessions(id),
+  user_id uuid references users(id),
+  agent_id uuid references agents(id),
+  user_query text,
+  latency_ms int,
+  token_in int,
+  token_out int,
+  created_at timestamptz default now()
+);
+
+create table answers (
+  id uuid primary key default gen_random_uuid(),
+  query_id uuid references queries(id),
+  session_id uuid references sessions(id),
+  text text,
+  confidence float,
+  showed_confidence boolean,
+  fail_safe_triggered boolean default false,
+  created_at timestamptz default now()
+);
+
+create table evals (
+  id uuid primary key default gen_random_uuid(),
+  query_id uuid references queries(id),
+  session_id uuid references sessions(id),
+  heuristic_max_sim float,
+  heuristic_mean_sim float,
+  pct_above_thresh float,
+  llm_faithfulness float,
+  aggregate_confidence float,
+  created_at timestamptz default now()
+);
+
+create table answer_citations (
+  id uuid primary key default gen_random_uuid(),
+  answer_id uuid references answers(id),
+  document_id uuid references documents(id),
+  version_id uuid references document_versions(id),
+  page_start int,
+  page_end int,
+  chunk_index int,
+  sim_score float,
+  created_at timestamptz default now()
+);
+
+-- Linear integration tables
+create table linear_projects (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references users(id),
+  linear_project_id text unique not null,
+  name text,
+  key text,
+  description text,
+  start_date timestamptz,
+  target_date timestamptz,
+  status text,
+  progress float,
+  last_synced_at timestamptz default now(),
+  created_at timestamptz default now()
+);
+
+create table linear_issues (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references linear_projects(id),
+  linear_issue_id text unique not null,
+  title text,
+  description text,
+  status text,
+  priority int,
+  estimate float,
+  assignee_id text,
+  epic_id text,
+  labels text[],
+  created_at timestamptz,
+  updated_at timestamptz,
+  completed_at timestamptz,
+  last_synced_at timestamptz default now()
+);
+
+create table linear_sprints (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references linear_projects(id),
+  linear_sprint_id text unique not null,
+  name text,
+  description text,
+  start_date timestamptz,
+  end_date timestamptz,
+  status text,
+  goal text,
+  last_synced_at timestamptz default now(),
+  created_at timestamptz default now()
+);
+
+create table linear_webhooks (
+  id uuid primary key default gen_random_uuid(),
+  webhook_id text,
+  event_type text,
+  payload jsonb,
+  processed boolean default false,
+  created_at timestamptz default now()
+);
+```
+
+---
+
+## 8. APIs
+
+### RAG APIs
+* **POST `/ingest_pdf`** – parse, embed, upsert, log.
+* **POST `/start_session`** – create new session.
+* **POST `/send_message`** – process query inside session, return answer+confidence+citations.
+* **POST `/reset_context`** – clear summary.
+* **DELETE `/sessions/:id`** – delete session + messages.
+* **GET `/sessions/:id/messages`** – retrieve messages.
+* **POST `/purge`** – manual delete logs/docs.
+
+### Linear Integration APIs
+* **GET `/linear/projects`** – fetch user's Linear projects.
+* **GET `/linear/projects/:id/issues`** – fetch project issues.
+* **GET `/linear/projects/:id/sprints`** – fetch project sprints.
+* **POST `/linear/issues`** – create new issue.
+* **PUT `/linear/issues/:id`** – update issue status/details.
+* **POST `/linear/sync`** – manual sync with Linear API.
+* **POST `/linear/webhooks`** – handle Linear webhook events.
+
+---
+
+## 9. Prompts
+
+**System Prompt (default):**
+
+```
+You are a question-answering assistant.
+Answer strictly based on provided context excerpts.
+If insufficient evidence, say: 
+"I don’t have enough evidence in the documents to answer confidently."
+Always cite sources with filename and page.
+```
+
+**LLM Judge Prompt:**
+
+```
+You are evaluating an answer for faithfulness.
+Input: Query, Context Excerpts, Answer.
+Output JSON:
+{ "faithfulness": float(0–1), "rationale": "<short text>" }
+```
+
+**Summary Updater Prompt:**
+
+```
+Maintain a concise summary of the session.
+Update only with facts supported by cited content.
+Exclude unverifiable claims.
+120–200 tokens max.
+```
+
+---
+
+## 10. Dashboard (Enhanced)
+
+### RAG Analytics
+* **Queries per day** (time series).
+* **Messages sent/received**.
+* **%Correctness (≥0.8 confidence)**.
+* **Top failed queries (<0.5 confidence)**.
+* **Avg tokens per turn, latency p50/p95**.
+
+### Project Management
+* **Sprint Progress**: Current sprint completion percentage and burndown.
+* **Issue Velocity**: Issues completed per sprint with trend analysis.
+* **Epic Status**: Progress across all project epics.
+* **Risk Dashboard**: High-risk issues and blockers.
+* **Team Productivity**: Development velocity and cycle time metrics.
+
+---
+
+## 11. Implementation Checklist
+
+### Core RAG Features
+* [ ] Auth: Supabase Google login.
+* [ ] Agent config page (editable prompts, retrieval params).
+* [ ] Document ingestion pipeline.
+* [ ] Session-based chat interface (messages, citations, confidence).
+* [ ] Inline evals + fail-safe logic.
+* [ ] Logs persisted in Supabase.
+
+### Linear Integration
+* [ ] Linear API client and authentication.
+* [ ] Project sync and caching system.
+* [ ] Issue management interface.
+* [ ] Sprint planning dashboard.
+* [ ] Webhook handling for real-time updates.
+* [ ] Project analytics and reporting.
+
+### Infrastructure
+* [ ] Dashboard with queries/day, correctness %, failed queries.
+* [ ] Admin/manual purge endpoint.
+* [ ] RLS policies for all tables.
+
+---
+
+## 12. Roadmap (v2+)
+
+### RAG Enhancements
+* Multi-turn memory improvements (semantic/entity memory).
+* Multi-agent per user.
+* Function/tool use.
+* External source sync (Drive, Notion).
+* Advanced eval dashboards.
+
+### Project Management
+* Advanced Linear features (custom workflows, automation).
+* Multi-project support.
+* Team collaboration features.
+* Advanced reporting and analytics.
+* Integration with other PM tools (Jira, Asana).
+
+### Platform
+* Multi-tenant orgs/workspaces.
+* API rate limiting and quotas.
+* Advanced security features.
+
+---
+
