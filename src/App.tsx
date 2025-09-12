@@ -14,6 +14,8 @@ import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
 import Documents from "./pages/Documents";
 import Chat from "./pages/Chat";
+import { FEATURE_FLAGS } from "@/lib/flags";
+
 
 const queryClient = new QueryClient();
 
@@ -26,7 +28,7 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />
-            <Route path="/login" element={<Login />} />
+            {FEATURE_FLAGS.ENABLE_AUTH_PROVIDERS && (<Route path="/login" element={<Login />} />)}
             <Route
               path="/dashboard"
               element={
@@ -35,14 +37,16 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/agents"
-              element={
-                <ProtectedRoute>
-                  <Agents />
-                </ProtectedRoute>
-              }
-            />
+            {FEATURE_FLAGS.ENABLE_AGENT_CONFIG && (
+              <Route
+                path="/agents"
+                element={
+                  <ProtectedRoute>
+                    <Agents />
+                  </ProtectedRoute>
+                }
+              />
+            )}
             <Route
               path="/settings"
               element={
@@ -59,22 +63,26 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/documents"
-              element={
-                <ProtectedRoute>
-                  <Documents />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/chat"
-              element={
-                <ProtectedRoute>
-                  <Chat />
-                </ProtectedRoute>
-              }
-            />
+            {FEATURE_FLAGS.ENABLE_DOCUMENT_UPLOAD && (
+              <Route
+                path="/documents"
+                element={
+                  <ProtectedRoute>
+                    <Documents />
+                  </ProtectedRoute>
+                }
+              />
+            )}
+            {FEATURE_FLAGS.ENABLE_CHAT_UI && (
+              <Route
+                path="/chat"
+                element={
+                  <ProtectedRoute>
+                    <Chat />
+                  </ProtectedRoute>
+                }
+              />
+            )}
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

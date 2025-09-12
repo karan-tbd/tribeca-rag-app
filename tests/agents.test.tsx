@@ -6,6 +6,12 @@ vi.mock("@/components/auth/AuthProvider", () => ({
   useAuth: () => ({ user: { id: "user-1", email: "a@example.com", user_metadata: {} }, loading: false }),
 }));
 
+
+// Stub AgentConfigForm to keep this test focused on list rendering
+vi.mock("@/components/agents/AgentConfigForm", () => ({
+  default: () => <div data-testid="agent-form" />,
+}));
+
 const mockSelectChain = {
   order: async () => ({ data: [
     { id: "a1", name: "Agent A", updated_at: new Date().toISOString() },
