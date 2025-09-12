@@ -1,0 +1,357 @@
+{
+  "note": "Use this payload to sync the Linear project. IMPORTANT: Wherever an issue with the same key already exists (e.g., RAG-1..RAG-19), UPDATE it in-place rather than creating a duplicate. Only create the new ones (RAG-20..RAG-23).",
+  "update_policy": "update_existing_if_present",
+  "project": {
+    "key": "RAG",
+    "name": "RAG Framework App v1",
+    "description": "Production-grade RAG app with session memory, ingestion pipeline, Pinecone + Supabase, customizable prompts, inline evals, dashboards, and confidence fail-safe.",
+    "access": "private",
+    "timeline_weeks": 6,
+    "workflow_states": ["Backlog", "Spec", "Ready", "In Progress", "Blocked", "In Review", "QA", "Done"],
+    "labels": ["frontend", "backend", "infra", "evals", "retrieval", "auth", "observability", "docs"],
+    "custom_fields": [
+      {
+        "name": "Component",
+        "type": "select",
+        "options": ["ingestion", "retrieval", "generation", "evals", "sessions", "dashboard", "persistence", "security"]
+      },
+      {
+        "name": "Estimate",
+        "type": "select",
+        "options": ["XS", "S", "M", "L", "XL", "XXL"]
+      },
+      {
+        "name": "Risk",
+        "type": "select",
+        "options": ["Low", "Medium", "High"]
+      },
+      {
+        "name": "Acceptance",
+        "type": "text"
+      }
+    ]
+  },
+  "epics": [
+    {"key": "EPIC-1", "name": "Authentication & User Management", "components": ["auth", "security"]},
+    {"key": "EPIC-2", "name": "Agent Configuration", "components": ["persistence", "frontend"]},
+    {"key": "EPIC-3", "name": "Document Ingestion & Indexing", "components": ["ingestion", "retrieval", "persistence"]},
+    {"key": "EPIC-4", "name": "Session-based Chat & Prompt Assembly", "components": ["sessions", "generation", "frontend"]},
+    {"key": "EPIC-5", "name": "Evaluation & Confidence System", "components": ["evals", "generation"]},
+    {"key": "EPIC-6", "name": "Dashboard & Analytics", "components": ["dashboard", "observability"]},
+    {"key": "EPIC-7", "name": "Security, RLS & Purge", "components": ["security", "persistence"]},
+    {"key": "EPIC-8", "name": "Deployment & Observability", "components": ["infra", "observability"]}
+  ],
+  "issues": [
+    {
+      "key": "RAG-1",
+      "operation": "update",
+      "title": "Google & Microsoft Login Integration",
+      "type": "Feature",
+      "epic": "EPIC-1",
+      "labels": ["backend", "auth"],
+      "custom_fields": {
+        "Component": "security",
+        "Estimate": "M",
+        "Risk": "Low",
+        "Acceptance": "- Supabase Auth configured with Google & Microsoft providers\n- User profile created on first login\n- Redirect to agent config after login\n- Robust error handling for auth failures\n- Tests: unit (provider flows), integration (login→session→logout)"
+      }
+    },
+    {
+      "key": "RAG-2",
+      "operation": "update",
+      "title": "Row-Level Security Setup",
+      "type": "Feature",
+      "epic": "EPIC-1",
+      "labels": ["backend", "security"],
+      "custom_fields": {
+        "Component": "security",
+        "Estimate": "S",
+        "Risk": "Medium",
+        "Acceptance": "- Enforce RLS: user_id = auth.uid() on all user-owned tables\n- Admin role can bypass for purge ops\n- Unauthorized access blocked (tests: negative/positive cases)"
+      }
+    },
+    {
+      "key": "RAG-3",
+      "operation": "update",
+      "title": "Agent Configuration UI",
+      "type": "Feature",
+      "epic": "EPIC-2",
+      "labels": ["frontend"],
+      "custom_fields": {
+        "Component": "sessions",
+        "Estimate": "M",
+        "Risk": "Medium",
+        "Acceptance": "- Form fields: name, description, system prompt\n- Additional fields: last K messages, similarity threshold, fail-safe toggle\n- Attach docs: upload new or select from global pool\n- Tests: unit (form validation), E2E (create→listed)"
+      }
+    },
+    {
+      "key": "RAG-4",
+      "operation": "update",
+      "title": "Agent Persistence Layer",
+      "type": "Feature",
+      "epic": "EPIC-2",
+      "labels": ["backend"],
+      "custom_fields": {
+        "Component": "persistence",
+        "Estimate": "M",
+        "Risk": "Medium",
+        "Acceptance": "- Table agents persists: name, prompt, embed_model, gen_model, last_k, sim_threshold, failsafe_enabled\n- Link docs via join table agent_docs\n- API: create/update/get agent (with doc mappings)\n- Tests: unit (schema), integration (create/read/update)"
+      }
+    },
+    {
+      "key": "RAG-5",
+      "operation": "update",
+      "title": "PDF Upload Interface",
+      "type": "Feature",
+      "epic": "EPIC-3",
+      "labels": ["frontend", "docs"],
+      "custom_fields": {
+        "Component": "ingestion",
+        "Estimate": "M",
+        "Risk": "Medium",
+        "Acceptance": "- Upload PDFs to Supabase Storage\n- Progress + states (parsing/embedded/ready)\n- Signed URL downloads\n- Tests: integration (upload→storage), UI (state transitions)"
+      }
+    },
+    {
+      "key": "RAG-6",
+      "operation": "update",
+      "title": "PDF Processing Pipeline",
+      "type": "Feature",
+      "epic": "EPIC-3",
+      "labels": ["backend"],
+      "custom_fields": {
+        "Component": "ingestion",
+        "Estimate": "L",
+        "Risk": "Medium",
+        "Acceptance": "- Parse→chunk (500–800 tokens, 10–15% overlap) with page ranges\n- Persist chunk metadata\n- Generate quick summary\n- Tests: unit (chunker), integration (pipeline happy path)"
+      }
+    },
+    {
+      "key": "RAG-7",
+      "operation": "update",
+      "title": "Vector Storage Integration (Pinecone)",
+      "type": "Feature",
+      "epic": "EPIC-3",
+      "labels": ["backend", "infra", "retrieval"],
+      "custom_fields": {
+        "Component": "retrieval",
+        "Estimate": "M",
+        "Risk": "Medium",
+        "Acceptance": "- Embeddings: OpenAI text-embedding-3-small (default)\n- Pinecone index (cosine), namespace user_id:agent_id\n- Idempotent upserts via checksum\n- Tests: integration (upsert/query), retry on transient errors"
+      }
+    },
+    {
+      "key": "RAG-20",
+      "operation": "create",
+      "title": "Global Documents Tab (UI)",
+      "type": "Feature",
+      "epic": "EPIC-3",
+      "labels": ["frontend", "docs"],
+      "custom_fields": {
+        "Component": "dashboard",
+        "Estimate": "L",
+        "Risk": "Medium",
+        "Acceptance": "- Table lists all docs with name, summary, latest version, linked agents\n- Link/unlink doc ↔ agent from UI\n- Delete doc removes all mappings + vectors (DB tombstone)\n- Tests: integration (link/unlink), E2E (delete flow)"
+      }
+    },
+    {
+      "key": "RAG-21",
+      "operation": "create",
+      "title": "Doc ↔ Agent Mapping API",
+      "type": "Feature",
+      "epic": "EPIC-3",
+      "labels": ["backend", "persistence"],
+      "custom_fields": {
+        "Component": "persistence",
+        "Estimate": "M",
+        "Risk": "Medium",
+        "Acceptance": "- Join table agent_docs implemented\n- Endpoints to link/unlink docs ↔ agents (optional version scoping)\n- Unlinking purges only those vectors from Pinecone\n- Tests: integration (link/unlink), data integrity"
+      }
+    },
+    {
+      "key": "RAG-8",
+      "operation": "update",
+      "title": "Session Management API",
+      "type": "Feature",
+      "epic": "EPIC-4",
+      "labels": ["backend"],
+      "custom_fields": {
+        "Component": "sessions",
+        "Estimate": "M",
+        "Risk": "Medium",
+        "Acceptance": "- Tables: sessions, messages, session_summaries\n- Endpoints: start_session, send_message, reset_context\n- Session memory = rolling summary + last K turns\n- Do not rebuild full context every turn\n- Tests: integration (message append, reset)"
+      }
+    },
+    {
+      "key": "RAG-9",
+      "operation": "update",
+      "title": "Prompt Assembly Function",
+      "type": "Feature",
+      "epic": "EPIC-4",
+      "labels": ["backend", "generation"],
+      "custom_fields": {
+        "Component": "generation",
+        "Estimate": "M",
+        "Risk": "Medium",
+        "Acceptance": "- Merge: System Prompt + Summary + last K + RAG context + current query\n- Token-budget trimming without dropping citations\n- Tests: unit (assembly), golden-prompt snapshots"
+      }
+    },
+    {
+      "key": "RAG-10",
+      "operation": "update",
+      "title": "Chat UI",
+      "type": "Feature",
+      "epic": "EPIC-4",
+      "labels": ["frontend"],
+      "custom_fields": {
+        "Component": "sessions",
+        "Estimate": "L",
+        "Risk": "Medium",
+        "Acceptance": "- Agent selector\n- Messages with role display\n- Citations with doc+page\n- Confidence footer if <0.8; fail-safe message if <0.5\n- Tests: E2E (ask→answer with footer/citations)"
+      }
+    },
+    {
+      "key": "RAG-13",
+      "operation": "update",
+      "title": "Confidence Aggregation & Display",
+      "type": "Feature",
+      "epic": "EPIC-5",
+      "labels": ["backend", "evals"],
+      "custom_fields": {
+        "Component": "evals",
+        "Estimate": "M",
+        "Risk": "Medium",
+        "Acceptance": "- Compute heuristics (max_sim, mean_sim, %above_thresh) + LLM judge\n- Aggregate confidence 0–1\n- Display confidence % as footer in chat\n- Thresholds: <0.5 fail-safe; 0.5–0.79 show footer; ≥0.8 hide\n- Tests: unit (aggregation), UI thresholds"
+      }
+    },
+    {
+      "key": "RAG-14",
+      "operation": "update",
+      "title": "Query/Answer/Eval Logging",
+      "type": "Feature",
+      "epic": "EPIC-6",
+      "labels": ["backend", "observability"],
+      "custom_fields": {
+        "Component": "dashboard",
+        "Estimate": "M",
+        "Risk": "Medium",
+        "Acceptance": "- Persist queries, answers, evals with session_id\n- Log tokens (in/out) and latency per query\n- Tests: integration (log rows), dashboard reads"
+      }
+    },
+    {
+      "key": "RAG-15",
+      "operation": "update",
+      "title": "Dashboard UI (Basics)",
+      "type": "Feature",
+      "epic": "EPIC-6",
+      "labels": ["frontend", "observability"],
+      "custom_fields": {
+        "Component": "dashboard",
+        "Estimate": "M",
+        "Risk": "Medium",
+        "Acceptance": "- Cards: #messages sent/received, %correctness (≥0.8), top failed queries (<0.5)\n- Time series: queries/day\n- Tests: UI renders from sample views"
+      }
+    },
+    {
+      "key": "RAG-16",
+      "operation": "update",
+      "title": "Document Purge Workflow",
+      "type": "Feature",
+      "epic": "EPIC-7",
+      "labels": ["backend", "security"],
+      "custom_fields": {
+        "Component": "security",
+        "Estimate": "S",
+        "Risk": "Medium",
+        "Acceptance": "- Delete doc removes all agent mappings and Pinecone vectors\n- DB tombstone remains\n- Tests: integration (purge path), retrieval confirms removal"
+      }
+    },
+    {
+      "key": "RAG-17",
+      "operation": "update",
+      "title": "Production Deployment",
+      "type": "Feature",
+      "epic": "EPIC-8",
+      "labels": ["infra"],
+      "custom_fields": {
+        "Component": "infra",
+        "Estimate": "M",
+        "Risk": "Low",
+        "Acceptance": "- Vercel + Supabase configured with secrets\n- Smoke test passes post-deploy\n- Tests: deployment checklist CI job"
+      }
+    },
+    {
+      "key": "RAG-18",
+      "operation": "update",
+      "title": "Structured Logging & Tracing",
+      "type": "Feature",
+      "epic": "EPIC-8",
+      "labels": ["backend", "observability"],
+      "custom_fields": {
+        "Component": "observability",
+        "Estimate": "S",
+        "Risk": "Low",
+        "Acceptance": "- Request IDs, structured logs\n- Spans for parse→chunk→embed→retrieve→generate→eval\n- Tests: logs present in test env"
+      }
+    },
+    {
+      "key": "RAG-19",
+      "operation": "update",
+      "title": "CI/CD Pipeline",
+      "type": "Feature",
+      "epic": "EPIC-8",
+      "labels": ["infra"],
+      "custom_fields": {
+        "Component": "infra",
+        "Estimate": "M",
+        "Risk": "Medium",
+        "Acceptance": "- Lint, typecheck, unit, integration, e2e test stages\n- Block merge on failures\n- Tests: intentional failing test blocks merge"
+      }
+    },
+    {
+      "key": "RAG-22",
+      "operation": "create",
+      "title": "Repo Scaffold Setup",
+      "type": "Feature",
+      "epic": "EPIC-8",
+      "labels": ["infra", "docs"],
+      "custom_fields": {
+        "Component": "infra",
+        "Estimate": "S",
+        "Risk": "Low",
+        "Acceptance": "- Create folders: /src, /tests, /scripts/linear, /docs, /config, /infra\n- Add /config/.env.example\n- No stray files in repo root"
+      }
+    },
+    {
+      "key": "RAG-23",
+      "operation": "create",
+      "title": "TDD Enforcement",
+      "type": "Feature",
+      "epic": "EPIC-8",
+      "labels": ["infra", "docs"],
+      "custom_fields": {
+        "Component": "infra",
+        "Estimate": "M",
+        "Risk": "Medium",
+        "Acceptance": "- CI fails if tests missing or failing\n- Every feature starts with tests (unit/integration/e2e)\n- Test results stored as build artifacts and visible to user"
+      }
+    }
+  ],
+  "sprints": [
+    {
+      "name": "Sprint 1 — Foundation",
+      "weeks": 2,
+      "issues": ["RAG-1", "RAG-2", "RAG-3", "RAG-4", "RAG-17", "RAG-22"]
+    },
+    {
+      "name": "Sprint 2 — RAG + Docs",
+      "weeks": 2,
+      "issues": ["RAG-5", "RAG-6", "RAG-7", "RAG-20", "RAG-21", "RAG-8", "RAG-9", "RAG-10"]
+    },
+    {
+      "name": "Sprint 3 — Evals, Dashboard, Hardening",
+      "weeks": 2,
+      "issues": ["RAG-13", "RAG-14", "RAG-15", "RAG-16", "RAG-18", "RAG-19", "RAG-23"]
+    }
+  ]
+}
