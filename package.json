@@ -10,7 +10,9 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest",
-    "test:ci": "vitest run"
+    "test:ci": "vitest run",
+    "test:timeout": "vitest run --reporter=basic --reporter=./tests/utils/timeout-reporter.ts",
+    "test:replay-timeouts": "node scripts/rerun-timeouts.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

@@ -11,7 +11,7 @@ export const FEATURE_FLAGS = {
   ENABLE_AUTH_MICROSOFT: true,
 
   // Track 2: Agent Configuration
-  ENABLE_AGENT_CONFIG: false,
+  ENABLE_AGENT_CONFIG: true,
 
   // Track 3: Document Pipeline
   ENABLE_DOCUMENT_UPLOAD: false,
