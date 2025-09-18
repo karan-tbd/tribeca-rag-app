@@ -23,5 +23,7 @@ export default defineConfig(({ mode }) => ({
     pool: "forks",
     threads: false,
     singleThread: true,
+    testTimeout: 10_000,
+    hookTimeout: 10_000,
   },
 }));

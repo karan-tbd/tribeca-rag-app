@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import AgentDocuments from "./AgentDocuments";
 
 interface AgentConfigFormProps {
   agentId?: string | null;
@@ -86,52 +87,57 @@ export default function AgentConfigForm({ agentId: propAgentId, onSave }: AgentC
   };
 
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-      <div>
-        <label className="text-sm font-medium">Name</label>
-        <Input {...form.register("name")} placeholder="My Agent" />
-        {form.formState.errors.name && (
-          <p className="text-sm text-red-500">{form.formState.errors.name.message}</p>
-        )}
-      </div>
-      <div>
-        <label className="text-sm font-medium">Description</label>
-        <Textarea {...form.register("description")} rows={2} />
-      </div>
-      <div>
-        <label className="text-sm font-medium">System Prompt</label>
-        <Textarea {...form.register("system_prompt")} rows={4} />
-      </div>
-      <div>
-        <label className="text-sm font-medium">Query Template</label>
-        <Textarea {...form.register("query_template")} rows={3} />
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="space-y-6">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         <div>
-          <label className="text-sm font-medium">Embedding Model</label>
-          <Input {...form.register("embed_model")} placeholder="text-embedding-3-small" />
+          <label className="text-sm font-medium">Name</label>
+          <Input {...form.register("name")} placeholder="My Agent" />
+          {form.formState.errors.name && (
+            <p className="text-sm text-red-500">{form.formState.errors.name.message}</p>
+          )}
         </div>
         <div>
-          <label className="text-sm font-medium">Generation Model</label>
-          <Input {...form.register("gen_model")} placeholder="gpt-4o-mini" />
-        </div>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <label className="text-sm font-medium">k</label>
-          <Input type="number" {...form.register("k", { valueAsNumber: true })} />
+          <label className="text-sm font-medium">Description</label>
+          <Textarea {...form.register("description")} rows={2} />
         </div>
         <div>
-          <label className="text-sm font-medium">Similarity Threshold</label>
-          <Input type="number" step="0.01" {...form.register("sim_threshold", { valueAsNumber: true })} />
+          <label className="text-sm font-medium">System Prompt</label>
+          <Textarea {...form.register("system_prompt")} rows={4} />
         </div>
         <div>
-          <label className="text-sm font-medium">Fail-safe Threshold</label>
-          <Input type="number" step="0.01" {...form.register("fail_safe_threshold", { valueAsNumber: true })} />
+          <label className="text-sm font-medium">Query Template</label>
+          <Textarea {...form.register("query_template")} rows={3} />
         </div>
-      </div>
-      <Button type="submit">Save</Button>
-    </form>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="text-sm font-medium">Embedding Model</label>
+            <Input {...form.register("embed_model")} placeholder="text-embedding-3-small" />
+          </div>
+          <div>
+            <label className="text-sm font-medium">Generation Model</label>
+            <Input {...form.register("gen_model")} placeholder="gpt-4o-mini" />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="text-sm font-medium">k</label>
+            <Input type="number" {...form.register("k", { valueAsNumber: true })} />
+          </div>
+          <div>
+            <label className="text-sm font-medium">Similarity Threshold</label>
+            <Input type="number" step="0.01" {...form.register("sim_threshold", { valueAsNumber: true })} />
+          </div>
+          <div>
+            <label className="text-sm font-medium">Fail-safe Threshold</label>
+            <Input type="number" step="0.01" {...form.register("fail_safe_threshold", { valueAsNumber: true })} />
+          </div>
+        </div>
+        <Button type="submit">Save</Button>
+      </form>
+
+      {/* Documents Section */}
+      <AgentDocuments agentId={agentId} />
+    </div>
   );
 }
 

@@ -9,7 +9,7 @@ max_rows = 1000
 
 [auth]
 enabled = true
-port = 54324
+# ❌ no `auth.port` in current schema — remove it
 
 [auth.email]
 enable_signup = true
@@ -33,15 +33,14 @@ max_client_conn = 100
 
 [realtime]
 enabled = true
-port = 54323
+# ❌ no `realtime.port` — remove it
 
 [studio]
 enabled = true
 port = 54323
 
-[functions]
-enabled = true
-port = 54321
+# ❌ Global [functions] table with `enabled/port` is invalid — remove it.
+# Define per-function blocks only:
 
 [functions.process-document]
 verify_jwt = true
@@ -51,4 +50,5 @@ verify_jwt = true
 
 [edge_runtime]
 enabled = true
-port = 54326
+# ❌ `edge_runtime.port` is invalid; use inspector_port instead if you want it
+inspector_port = 54326

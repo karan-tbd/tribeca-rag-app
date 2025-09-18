@@ -1,0 +1,325 @@
+
+
+# 📄 PRD — RAG Framework App (Final with Repo Scaffold)
+
+---
+
+## 1. Problem
+
+Users need a **secure, session-aware RAG platform** where they can:
+
+* Log in with Google/Microsoft.
+* Create and manage **agents** configured with prompts, models, and documents.
+* Chat with selected agents in a conversational UI with **session memory**.
+* Upload/manage documents (with versioning and summaries), view them globally, and see which agents they’re linked to.
+* Receive **confidence-scored, cited answers**, with fail-safe when low confidence.
+* Ensure a **test-driven development workflow**, structured logging, and integration with Linear for tracking.
+
+---
+
+## 2. Goals
+
+1. **Auth & Accounts**: Support Google and Microsoft login.
+2. **Agent Management**: Create/edit/delete agents with configurable prompts, models, and docs.
+3. **Document Management**: Global pool of docs, visible in a “Documents” tab, with summaries, versioning, and links to agents.
+4. **Chat Experience**: Session-based conversations with context memory + RAG retrieval, confidence scoring, and citations.
+5. **Profile & Dashboard**: Show user info and usage stats (#agents, #docs).
+6. **Infrastructure**: Supabase (DB/Auth/Storage), Pinecone (embeddings), OpenAI (embeddings + generation), Linear (tracking).
+7. **Engineering Workflow**: Test-driven development (TDD) enforced, with logs for queries/answers/evals/tokens/latency.
+
+---
+
+## 3. Functional Requirements
+
+### 3.1 Authentication
+
+* Login with **Google or Microsoft** via Supabase Auth.
+* JWT-based session persistence.
+
+### 3.2 Agents
+
+* Users can create agents with:
+
+  * Name, description.
+  * System prompt.
+  * Attached documents (upload new or select from global pool).
+  * Embedding model (default: `text-embedding-3-small`).
+  * Generation model (default: `gpt-4o-mini`).
+  * Last K messages (default 6).
+  * Similarity threshold (default 0.75).
+  * Fail-safe toggle (on/off).
+* Users can remove a doc from an agent’s knowledge base.
+* Docs uploaded here are also added to the global pool.
+
+### 3.3 Documents
+
+* **Global “Documents” tab**: lists all docs uploaded by the user.
+* Each doc shows:
+
+  * Name.
+  * Auto-generated quick summary.
+  * Version history.
+  * Agents it’s linked to.
+* Users can:
+
+  * Upload new docs.
+  * Link/unlink docs ↔ agents.
+  * Delete a doc (removes all links + vectors + marks tombstone).
+
+### 3.4 Chat
+
+* Chat window requires selecting an agent.
+* Each chat session:
+
+  * Maintains **session memory** (rolling summary + last K turns).
+  * Pulls relevant context chunks from Pinecone.
+* Each answer includes:
+
+  * Response text.
+  * **Confidence footer** (displayed if <80%).
+  * Citations (doc name + page).
+  * Fail-safe response if <50%.
+* Queries, answers, evals, tokens, and latency are logged.
+
+### 3.5 Profile
+
+* Basic user info (name, email, org).
+* Stats: #agents, #docs, #sessions.
+
+---
+
+## 4. Non-Functional Requirements
+
+* **Test-Driven Development (TDD)**:
+
+  1. Understand feature/problem.
+  2. Define success criteria.
+  3. Write functional + technical tests.
+  4. Develop feature.
+  5. Run tests → fail → debug; pass → commit.
+  6. Update Linear issue with results.
+* Latency target: <3s p50 per query.
+* Scalability: 1000 docs/user, 50 agents/user.
+* Security:
+
+  * Supabase RLS policies per user.
+  * Signed URLs for docs.
+  * Pinecone vectors namespaced `user_id:agent_id`.
+
+---
+
+## 5. System Design
+
+**Frontend (Next.js/Vercel)**
+
+* Tabs: Agents, Documents, Chat, Profile.
+* State: React Query + Context.
+
+**Backend (Supabase + Edge Functions)**
+
+* Auth: Google/Microsoft.
+* DB: Supabase Postgres (agents, docs, sessions, logs).
+* Storage: Supabase buckets for PDFs.
+* Edge Functions:
+
+  * `ingest_doc`: parse, chunk, embed, upsert.
+  * `create_agent`: save agent + doc mappings.
+  * `query_chat`: assemble prompt, run OpenAI call, eval, log.
+  * `unlink_doc`: remove agent↔doc mapping.
+  * `delete_doc`: purge vectors + tombstone record.
+
+**Vector DB (Pinecone)**
+
+* Index: cosine similarity.
+* Namespace: `user_id:agent_id`.
+
+**Models (OpenAI)**
+
+* Embeddings: `text-embedding-3-small`.
+* Generation: `gpt-4o-mini`.
+
+**Tracking (Linear MCP)**
+
+* All epics/issues in Linear.
+* One PR per issue.
+* Test results stored as artifacts.
+
+---
+
+## 6. Data Models
+
+**users**
+
+* id, email, name, org, created\_at
+
+**agents**
+
+* id, user\_id, name, description, system\_prompt, embed\_model, gen\_model, last\_k, sim\_threshold, failsafe\_enabled, created\_at
+
+**documents**
+
+* id, user\_id, name, summary, latest\_version, created\_at
+
+**document\_versions**
+
+* id, document\_id, version\_no, checksum, created\_at
+
+**document\_chunks**
+
+* id, document\_id, version\_id, page\_start, page\_end, chunk\_index, token\_count, created\_at
+
+**agent\_docs** (join table)
+
+* id, agent\_id, document\_id, version\_id
+
+**sessions**
+
+* id, user\_id, agent\_id, title, created\_at
+
+**messages**
+
+* id, session\_id, role (user/assistant), content, tokens\_in, tokens\_out, created\_at
+
+**session\_summaries**
+
+* id, session\_id, summary\_text, updated\_at
+
+**queries**
+
+* id, session\_id, user\_query, latency\_ms, token\_in, token\_out, created\_at
+
+**answers**
+
+* id, query\_id, text, confidence, fail\_safe\_triggered, created\_at
+
+**evals**
+
+* id, query\_id, heuristic\_max\_sim, heuristic\_mean\_sim, pct\_above\_thresh, llm\_faithfulness, aggregate\_confidence, created\_at
+
+**citations**
+
+* id, answer\_id, doc\_id, version\_id, page\_start, page\_end, chunk\_index, sim\_score
+
+---
+
+## 7. Workflows
+
+### 7.1 Agent Creation
+
+1. User clicks **New Agent**.
+2. Configures prompt/models/thresholds.
+3. Attaches docs (upload new → adds to pool, or select existing).
+4. Agent saved + Pinecone upserts.
+
+### 7.2 Document Management
+
+* **Documents Tab** lists all user docs.
+* User actions:
+
+  * Upload new doc (goes to pool, linkable to agents).
+  * View/edit doc summary + versions.
+  * Link/unlink agents.
+  * Delete doc (purge all).
+
+### 7.3 Chat
+
+1. User selects an agent → start session.
+2. User sends query.
+3. Backend: fetch session summary + last K → retrieve Pinecone context → call LLM.
+4. Run evals → aggregate confidence.
+5. Store logs.
+6. Display: answer + citations + confidence footer.
+
+---
+
+## 8. QA / TDD Protocol
+
+* Every feature begins with tests.
+* Store tests under `/tests` (mirrors `/src`).
+* Types:
+
+  * Unit: chunking, eval aggregation.
+  * Integration: agent creation, doc ingestion.
+  * E2E: chat with agent, fail-safe flow.
+* CI runs all tests before merging.
+* Test results stored and viewable.
+
+---
+
+## 9. Repo Folder Scaffold
+
+```
+/ (root)
+├── /src
+│   ├── /frontend        # Next.js components, pages, hooks
+│   ├── /backend         # Supabase edge functions
+│   ├── /agents          # Agent config + orchestration logic
+│   ├── /docs_ingest     # PDF parsing, chunking, embedding
+│   ├── /chat            # Session memory, prompt assembly
+│   ├── /evals           # Eval heuristics + judge logic
+│   └── /utils           # Shared helpers
+│
+├── /tests
+│   ├── /unit
+│   ├── /integration
+│   └── /e2e
+│
+├── /scripts
+│   └── /linear          # Linear MCP setup/automation scripts
+│
+├── /docs
+│   ├── PRD.md           # This PRD
+│   ├── ARCHITECTURE.md  # High-level diagrams
+│   └── SETUP.md         # Dev setup instructions
+│
+├── /config
+│   ├── supabase/        # DB migrations, schema
+│   ├── vercel/          # Vercel configs
+│   └── .env.example     # Env template
+│
+├── /infra
+│   ├── docker/          # Dockerfiles, compose
+│   └── deploy/          # CI/CD configs
+│
+└── package.json
+```
+
+**Rules:**
+
+* All Linear scripts under `/scripts/linear`.
+* All docs under `/docs`.
+* All tests mirror `/src`.
+* No stray files in root — everything must be slubbed into its folder.
+
+---
+
+## 10. Metrics
+
+* \#agents/user.
+* \#docs uploaded.
+* Avg confidence per query.
+* % queries <0.5 (fail-safe).
+* Latency p50/p95.
+* Token usage.
+
+---
+
+## 11. Risks
+
+* Large doc versions → storage quota.
+* Eval latency → longer response time.
+* Token drift → trimming last K required.
+* Multi-tenant doc-sharing not yet designed.
+
+---
+
+✅ This PRD now covers:
+
+* Google/Microsoft login
+* Global Docs tab with agent mappings
+* Session-aware chat with memory + confidence
+* TDD workflow baked in
+* Repo scaffold for maintainability
+
+---
+
