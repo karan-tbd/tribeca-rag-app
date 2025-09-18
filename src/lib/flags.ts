@@ -14,7 +14,7 @@ export const FEATURE_FLAGS = {
   ENABLE_AGENT_CONFIG: true,
 
   // Track 3: Document Pipeline
-  ENABLE_DOCUMENT_UPLOAD: false,
+  ENABLE_DOCUMENT_UPLOAD: true,
   ENABLE_PDF_PROCESSING: false,
   ENABLE_VECTOR_STORAGE: false,
 

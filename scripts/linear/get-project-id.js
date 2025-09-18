@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-const https = require('https');
+import https from 'https';
 const NAME = process.argv[2] || 'RAG Framework App v1';
 const TOKEN = process.argv[3];
-if (!TOKEN) { console.error('Usage: node get-project-id.js <PROJECT_NAME> <LINEAR_API_TOKEN>'); process.exit(1);} 
+if (!TOKEN) { console.error('Usage: node get-project-id.js <PROJECT_NAME> <LINEAR_API_TOKEN>'); process.exit(1);}
 
 function q(query, variables={}){
   return new Promise((resolve,reject)=>{
@@ -18,7 +18,7 @@ function q(query, variables={}){
   const data = await q(`query { projects(first: 50) { nodes { id name url } } }`);
   const nodes = data && data.projects && data.projects.nodes || [];
   const match = nodes.find(p=>p.name === NAME);
-  if (!match) { console.error('Not found'); process.exit(2);} 
+  if (!match) { console.error('Not found'); process.exit(2);}
   console.log(JSON.stringify(match,null,2));
 })();
 
