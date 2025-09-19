@@ -9,13 +9,14 @@ export const FEATURE_FLAGS = {
   ENABLE_AUTH_PROVIDERS: true,
   ENABLE_AUTH_GOOGLE: true,
   ENABLE_AUTH_MICROSOFT: true,
+  ENABLE_AUTH_EMAIL: true, // Development email/password login
 
   // Track 2: Agent Configuration
   ENABLE_AGENT_CONFIG: true,
 
   // Track 3: Document Pipeline
   ENABLE_DOCUMENT_UPLOAD: true,
-  ENABLE_PDF_PROCESSING: false,
+  ENABLE_PDF_PROCESSING: true,
   ENABLE_VECTOR_STORAGE: false,
 
   // Track 4: Chat

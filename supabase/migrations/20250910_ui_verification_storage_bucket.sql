@@ -7,7 +7,8 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM storage.buckets WHERE id = 'documents'
   ) THEN
-    PERFORM storage.create_bucket('documents', FALSE);
+    INSERT INTO storage.buckets (id, name, public)
+    VALUES ('documents', 'documents', false);
   END IF;
 END $$;
 

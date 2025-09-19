@@ -9,17 +9,26 @@ max_rows = 1000
 
 [auth]
 enabled = true
-# ❌ no `auth.port` in current schema — remove it
+# Local development settings
+site_url = "http://localhost:8081"
+additional_redirect_urls = ["http://localhost:8081"]
 
 [auth.email]
 enable_signup = true
-double_confirm_changes = true
+double_confirm_changes = false
 enable_confirmations = false
 
 [auth.external.google]
-enabled = false
-client_id = ""
-secret = ""
+enabled = true
+client_id = "your-google-client-id"
+secret = "your-google-client-secret"
+redirect_uri = "http://localhost:54321/auth/v1/callback"
+
+[auth.external.azure]
+enabled = true
+client_id = "your-azure-client-id"
+secret = "your-azure-client-secret"
+url = "https://login.microsoftonline.com/common"
 
 [db]
 port = 54322
