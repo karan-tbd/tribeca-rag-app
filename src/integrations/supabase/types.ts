@@ -7,30 +7,10 @@ export type Json =
   | Json[]
 
 export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "13.0.5"
   }
   public: {
     Tables: {
@@ -202,49 +182,31 @@ export type Database = {
       chunks: {
         Row: {
           chunk_index: number
-          chunk_overlap_end: number | null
-          chunk_overlap_start: number | null
-          content: string | null
           created_at: string | null
           document_id: string
-          embedding: string | null
-          embedding_model: string | null
           id: string
           page_end: number
           page_start: number
-          processing_status: string | null
           token_count: number
           version_id: string
         }
         Insert: {
           chunk_index: number
-          chunk_overlap_end?: number | null
-          chunk_overlap_start?: number | null
-          content?: string | null
           created_at?: string | null
           document_id: string
-          embedding?: string | null
-          embedding_model?: string | null
           id?: string
           page_end: number
           page_start: number
-          processing_status?: string | null
           token_count: number
           version_id: string
         }
         Update: {
           chunk_index?: number
-          chunk_overlap_end?: number | null
-          chunk_overlap_start?: number | null
-          content?: string | null
           created_at?: string | null
           document_id?: string
-          embedding?: string | null
-          embedding_model?: string | null
           id?: string
           page_end?: number
           page_start?: number
-          processing_status?: string | null
           token_count?: number
           version_id?: string
         }
@@ -300,7 +262,7 @@ export type Database = {
       documents: {
         Row: {
           agent_id: string
-          chunk_count: number | null
+          chunk_count: number
           created_at: string | null
           id: string
           latest_version: number | null
@@ -315,7 +277,7 @@ export type Database = {
         }
         Insert: {
           agent_id: string
-          chunk_count?: number | null
+          chunk_count?: number
           created_at?: string | null
           id?: string
           latest_version?: number | null
@@ -330,7 +292,7 @@ export type Database = {
         }
         Update: {
           agent_id?: string
-          chunk_count?: number | null
+          chunk_count?: number
           created_at?: string | null
           id?: string
           latest_version?: number | null
@@ -802,110 +764,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      binary_quantize: {
-        Args: { "": string } | { "": unknown }
-        Returns: unknown
-      }
-      cosine_similarity: {
-        Args: { a: string; b: string }
-        Returns: number
-      }
-      halfvec_avg: {
-        Args: { "": number[] }
-        Returns: unknown
-      }
-      halfvec_out: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      halfvec_send: {
-        Args: { "": unknown }
-        Returns: string
-      }
-      halfvec_typmod_in: {
-        Args: { "": unknown[] }
-        Returns: number
-      }
-      hnsw_bit_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      hnsw_halfvec_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      hnsw_sparsevec_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      hnswhandler: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      ivfflat_bit_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      ivfflat_halfvec_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      ivfflathandler: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      l2_norm: {
-        Args: { "": unknown } | { "": unknown }
-        Returns: number
-      }
-      l2_normalize: {
-        Args: { "": string } | { "": unknown } | { "": unknown }
-        Returns: unknown
-      }
-      sparsevec_out: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      sparsevec_send: {
-        Args: { "": unknown }
-        Returns: string
-      }
-      sparsevec_typmod_in: {
-        Args: { "": unknown[] }
-        Returns: number
-      }
-      update_document_chunk_count: {
-        Args: { doc_id: string }
-        Returns: undefined
-      }
-      update_document_processing_status: {
-        Args: { doc_id: string; error_msg?: string; status: string }
-        Returns: undefined
-      }
-      vector_avg: {
-        Args: { "": number[] }
-        Returns: string
-      }
-      vector_dims: {
-        Args: { "": string } | { "": unknown }
-        Returns: number
-      }
-      vector_norm: {
-        Args: { "": string }
-        Returns: number
-      }
-      vector_out: {
-        Args: { "": string }
-        Returns: unknown
-      }
-      vector_send: {
-        Args: { "": string }
-        Returns: string
-      }
-      vector_typmod_in: {
-        Args: { "": unknown[] }
-        Returns: number
-      }
+      [_ in never]: never
     }
     Enums: {
       [_ in never]: never
@@ -1034,11 +893,7 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },
 } as const
-
