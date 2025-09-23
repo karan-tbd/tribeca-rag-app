@@ -2,9 +2,9 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-// Read from Vite env. Define these in your .env/.env.local
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+// Read from Vite env. Define these in your .env/.env.local  
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://xridnxtrvtrnqyngrgib.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhyaWRueHRydnRybnF5bmdyZ2liIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0ODYwOTMsImV4cCI6MjA3MzA2MjA5M30.Tq61SYM5cCIacqBHuvWkaN7Wc8IHmCiTYD1xZpobq6o';
 
 if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
   throw new Error(
