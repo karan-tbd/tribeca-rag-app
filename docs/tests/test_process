@@ -1,0 +1,91 @@
+Objective
+Run the test suite with step-by-step logging, produce human-readable and machine-readable reports, diagnose any failed or stuck tests (including timeouts/open handles), and deliver an RCA with clear resolution suggestions.
+
+Repository Context
+- Runner: Vitest (configured in vite.config.ts)
+- Global setup: tests/setup.ts (jest-dom, cleanup, global mocks)
+- Useful scripts (from package.json):
+  - test:ci → vitest run on CI subset
+  - test:components → vitest run on component subset
+  - test:report → emits verbose + JSON report to .vitest-report.json
+  - test:timeout → runs with custom timeout reporter (writes .vitest-timeouts.json)
+  - test:replay-timeouts → re-runs only timed-out tests from .vitest-timeouts.json
+
+Required Outputs (Deliverables)
+1) Human-readable logs showing test execution order and key steps (verbose).
+2) Machine-readable JSON report: .vitest-report.json (attach or paste summary).
+3) If any timeouts: .vitest-timeouts.json and a re-run log for only timed-out tests.
+4) An RCA document that includes for each failing/stuck test:
+   - Test file and test name
+   - Symptoms (failure message, stack, or hang characteristics)
+   - Key logs and exit codes
+   - Root cause hypothesis with evidence
+   - Resolution suggestions (code/test/config), estimated effort, potential side effects
+
+Constraints
+- Do not install dependencies or change code unless explicitly instructed.
+- Prefer smallest, fastest commands that provide reliable signals.
+- If something is ambiguous, ask clarifying questions instead of assuming.
+
+Step-by-step Process
+
+1) Quick sanity and verbose run
+- All tests with verbose (prefer this for step-by-step logging):
+  npx vitest run --reporter=verbose
+- If you need to limit to the predefined CI subset:
+  npm run test:ci -- --reporter=verbose
+- If you need only component tests:
+  npm run test:components -- --reporter=verbose
+
+2) Generate report artifact (JSON)
+- Produce a machine-readable artifact:
+  npm run test:report
+- Save/attach .vitest-report.json; include a short stats summary:
+  - numTotalTestSuites, numFailedTestSuites, numTotalTests, numFailedTests, etc.
+
+3) Diagnose hangs/timeouts (if any)
+- Run with timeout reporter (prints summary, writes .vitest-timeouts.json):
+  npm run test:timeout
+- If .vitest-timeouts.json is non-empty, re-run only those tests:
+  npm run test:replay-timeouts
+- For “stuck” behavior or lingering handles, re-run the specific file with open-handle detection:
+  npx vitest run tests/<file> --reporter=verbose --detectOpenHandles
+
+4) Isolate and deep-dive failures
+- Re-run failing files individually with verbose to capture detailed step-by-step logs:
+  npx vitest run tests/<failing-file> --reporter=verbose
+- For async UI tests, ensure you wait on UI queries with await screen.findBy... where applicable and check for global mocks in tests/setup.ts.
+
+5) Known pitfalls and quick checks (repo-specific)
+- Realtime mocks: Components using Supabase Realtime must be mocked (supabase.channel) to avoid open handles.
+- Copy drift: UI labels may change; align expectations, e.g.:
+  - File size validation should be 10MB (both UI and backend).
+  - “Processed” badge copy is “Ready for search” (not just “Ready”).
+- Avoid heavy allocations in tests: prefer overriding File.size to simulate large files rather than constructing large buffers.
+
+6) RCA (Root Cause Analysis) Template
+For each failing/stuck test, provide:
+- Identifier: <file> :: "<test name>"
+- Symptoms:
+  - Failure message or hang description, with timestamps and exit code
+- Evidence:
+  - Key stdout/stderr lines and relevant stack frames
+  - Whether it reproduces when run in isolation
+- Root Cause Hypothesis:
+  - Code/test/config-level cause (link to line numbers if known)
+- Resolution Suggestions:
+  - Concrete change(s): test selector/copy update, add supabase.channel mock, align size validation (10MB), adjust toast expectations, etc.
+  - Risk & side effects
+  - Estimated effort
+- Status:
+  - Confirmed, Needs more info, or Blocked (state why)
+
+Acceptance Criteria
+- Verbose logs show per-test execution order and results.
+- .vitest-report.json produced and summarized.
+- If timeouts occurred: .vitest-timeouts.json produced + targeted re-run logs present.
+- For every failure/stuck item: RCA entry per the template with actionable fixes.
+
+Nice to have
+- A short executive summary: total tests, failed, timed out, and most probable root causes category (e.g., missing mocks, copy drift, async waits).
+- Links/paths to impacted files and suggested patch locations.

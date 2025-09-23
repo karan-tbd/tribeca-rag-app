@@ -8,7 +8,7 @@ vi.mock("@/components/auth/AuthProvider", () => ({
 
 // Hoisted mocks to satisfy Vitest hoisting rules
 const hoisted = vi.hoisted(() => ({
-  supabaseImpl: { 
+  supabaseImpl: {
     from: vi.fn() as any,
     storage: {
       from: vi.fn(() => ({
@@ -27,6 +27,14 @@ vi.mock("sonner", () => ({ toast: hoisted.toastObj }));
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: hoisted.supabaseImpl,
 }));
+
+// Mock supabase.channel to avoid real websocket/timers in tests
+(hoisted.supabaseImpl as any).channel = vi.fn(() => ({
+  on: vi.fn().mockReturnThis(),
+  subscribe: vi.fn(() => ({ unsubscribe: vi.fn() })),
+  unsubscribe: vi.fn(),
+}));
+
 
 import AgentDocuments from "@/components/agents/AgentDocuments";
 
@@ -81,7 +89,7 @@ beforeEach(() => {
 describe("AgentDocuments", () => {
   it("shows message when no agent is selected", () => {
     render(<AgentDocuments agentId={null} />);
-    
+
     expect(screen.getByText("Save the agent first to manage documents.")).toBeInTheDocument();
   });
 
@@ -133,7 +141,7 @@ describe("AgentDocuments", () => {
 
     // Create a mock PDF file
     const file = new File(["test content"], "test.pdf", { type: "application/pdf" });
-    
+
     const fileInput = screen.getByRole("textbox", { hidden: true }) as HTMLInputElement;
     await userEvent.upload(fileInput, file);
 
@@ -226,7 +234,7 @@ describe("AgentDocuments", () => {
     await userEvent.click(deleteButton);
 
     expect(confirmSpy).toHaveBeenCalledWith('Are you sure you want to delete "Test Document"?');
-    
+
     await waitFor(() => {
       expect(hoisted.toastObj.success).toHaveBeenCalledWith("Document deleted successfully");
     });
@@ -263,7 +271,7 @@ describe("AgentDocuments", () => {
     await userEvent.click(deleteButton);
 
     expect(confirmSpy).toHaveBeenCalled();
-    
+
     // Should not call delete APIs
     expect(hoisted.supabaseImpl.storage.from().remove).not.toHaveBeenCalled();
 

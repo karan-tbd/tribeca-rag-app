@@ -8,7 +8,7 @@ The Agent Configuration UI now includes integrated document management functiona
 
 ### Document Upload
 - **File Type Validation**: Only PDF files are accepted
-- **Size Limit**: Maximum file size of 50MB
+- **Size Limit**: Maximum file size of 10MB
 - **Progress Feedback**: Real-time upload status with success/error messages
 - **Automatic Processing**: Documents are automatically processed for search after upload
 
@@ -115,7 +115,7 @@ Agent Configuration
 
 ### File Validation
 - **Type Checking**: Only `application/pdf` MIME type allowed
-- **Size Limits**: 50MB maximum file size
+- **Size Limits**: 10MB maximum file size
 - **Path Security**: Files stored with user ID prefix to prevent access conflicts
 
 ## Testing

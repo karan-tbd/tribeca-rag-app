@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { Upload, FileText, Trash2, Calendar, Clock, CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import { ENABLE_PROCESSING_PROGRESS_TOASTS } from "@/config/featureFlags";
+import { Upload, FileText, Trash2, Calendar, Clock, CheckCircle, XCircle, AlertCircle, RefreshCw } from "lucide-react";
 
 interface Document {
   id: string;
@@ -133,7 +134,7 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
         return (
           <Badge variant="default" className="flex items-center gap-1 bg-green-100 text-green-800">
             <CheckCircle className="h-3 w-3" />
-            Ready
+            Ready for search
           </Badge>
         );
       case 'failed':
@@ -159,6 +160,77 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
     if (document.processing_status === 'processing') return 50;
     if (document.processing_status === 'failed') return 0;
     return 0;
+  };
+
+  // Fire-and-forget progress toasts for processing, behind a flag
+  const startProcessingToasts = (documentId: string) => {
+    if (!ENABLE_PROCESSING_PROGRESS_TOASTS) return () => {};
+    // Start toast immediately
+    toast.info("Starting PDF processing…");
+
+    const timers: number[] = [];
+    const schedule = [
+      { ms: 800, msg: "Processing 10%" },
+      { ms: 2000, msg: "Processing 25%" },
+      { ms: 4500, msg: "Processing 50%" },
+      { ms: 8000, msg: "Processing 75%" },
+      { ms: 11000, msg: "Processing 90%" },
+    ];
+
+    schedule.forEach(s => {
+      const id = window.setTimeout(() => toast.message(s.msg), s.ms);
+      timers.push(id);
+    });
+
+    // Subscribe to doc status to finish early
+    const channel = supabase
+      .channel(`doc-progress-${documentId}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'documents', filter: `id=eq.${documentId}` }, (payload) => {
+        const status = (payload.new as any)?.processing_status as string | undefined;
+        if (!status) return;
+        if (status === 'processed') {
+          toast.success('Processing complete. Ready for search.');
+          cleanup();
+        } else if (status === 'failed') {
+          const err = (payload.new as any)?.processing_error || 'Processing failed';
+          toast.error(err);
+          cleanup();
+        }
+      })
+      .subscribe();
+
+    const cleanup = () => {
+      timers.forEach(t => clearTimeout(t));
+      try { channel.unsubscribe(); } catch {}
+    };
+
+    // Also auto-cleanup after 60s
+    const hardTimeout = window.setTimeout(() => cleanup(), 60000);
+    timers.push(hardTimeout);
+
+    return cleanup;
+  };
+
+  const handleReprocess = async (document: Document) => {
+    if (!user) return;
+    try {
+      // Optimistic UI: set to processing
+      setDocuments(prev => prev.map(d => d.id === document.id ? { ...d, processing_status: 'processing' } as Document : d));
+
+      const { error } = await supabase.functions.invoke("process-document", {
+        body: { documentId: document.id },
+      });
+      if (error) {
+        throw error as any;
+      }
+      if (ENABLE_PROCESSING_PROGRESS_TOASTS) {
+        toast.success("Reprocessing started");
+      }
+      startProcessingToasts(document.id);
+    } catch (e: any) {
+      console.error("Reprocess failed:", e);
+      toast.error(e?.message || "Failed to start reprocessing");
+    }
   };
 
   const handleUpload = async () => {
@@ -215,7 +287,7 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
 
       // Trigger document processing
       try {
-        const { data: processResult, error: processError } = await supabase.functions.invoke("process-document", {
+        const { data: _processData, error: processError } = await supabase.functions.invoke("process-document", {
           body: { documentId: data.id },
         });
 
@@ -223,7 +295,11 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
           console.error("Processing invocation failed:", processError);
           toast.error("Upload succeeded but processing failed to start");
         } else {
-          toast.success("Document is being processed for search");
+          if (ENABLE_PROCESSING_PROGRESS_TOASTS) {
+            toast.success("Document is being processed for search");
+          }
+          // Kick off progress toasts (auto-cleans up on processed/failed)
+          startProcessingToasts(data.id);
         }
       } catch (processError) {
         console.error("Processing failed:", processError);
@@ -231,7 +307,7 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
       }
 
       // Refresh documents list and clear file input
-      setDocuments((prev) => [data, ...prev]);
+      setDocuments((prev) => [data as unknown as Document, ...prev]);
       clearFileInput();
     } catch (error: any) {
       console.error("Upload failed:", error);
@@ -371,6 +447,16 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
                   </div>
                   <div className="flex items-center gap-2">
                     {getStatusBadge(document.processing_status)}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleReprocess(document)}
+                      disabled={document.processing_status === 'processing'}
+                      className="flex items-center gap-1"
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                      Reprocess
+                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"
