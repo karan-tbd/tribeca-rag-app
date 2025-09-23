@@ -174,9 +174,9 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
         return;
       }
 
-      // Validate file size (50MB limit)
-      if (file.size > 50 * 1024 * 1024) {
-        toast.error("File size must be less than 50MB");
+      // Validate file size (10MB limit)
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error("File size must be less than 10MB");
         clearFileInput();
         return;
       }
@@ -332,7 +332,7 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Upload PDF files (max 50MB) to add knowledge to this agent.
+            Upload PDF files (max 10MB) to add knowledge to this agent.
           </p>
         </div>
 

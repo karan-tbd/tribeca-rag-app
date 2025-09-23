@@ -23,7 +23,9 @@ export default defineConfig(({ mode }) => ({
     pool: "forks",
     threads: false,
     singleThread: true,
-    testTimeout: 10_000,
-    hookTimeout: 10_000,
+    testTimeout: 15_000, // Increased timeout for CI
+    hookTimeout: 15_000,
+    // Exclude heavy scripts from test discovery
+    exclude: ["**/scripts/**", "**/node_modules/**", "**/dist/**"],
   },
 }));

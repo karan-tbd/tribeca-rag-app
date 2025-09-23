@@ -1,47 +1,53 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
 
-// Mock Supabase client
-const mockSupabase = {
-  from: vi.fn(() => ({
-    select: vi.fn(() => ({
-      eq: vi.fn(() => ({
-        single: vi.fn(() => Promise.resolve({ 
-          data: { 
-            id: 'test-doc-id', 
-            title: 'Test Document',
-            storage_path: 'test/path.pdf',
-            latest_version: 1,
-            processing_status: 'pending'
-          }, 
-          error: null 
-        }))
+// Create consistent mock objects that are reused regardless of arguments
+const mockStorageFromResult = {
+  upload: vi.fn(() => Promise.resolve({ error: null })),
+  download: vi.fn(() => Promise.resolve({
+    data: new Blob(['test pdf content'], { type: 'application/pdf' }),
+    error: null
+  }))
+};
+
+const mockFromResult = {
+  select: vi.fn(() => ({
+    eq: vi.fn(() => ({
+      single: vi.fn(() => Promise.resolve({
+        data: {
+          id: 'test-doc-id',
+          title: 'Test Document',
+          storage_path: 'test/path.pdf',
+          latest_version: 1,
+          processing_status: 'pending'
+        },
+        error: null
       }))
-    })),
-    insert: vi.fn(() => ({
-      select: vi.fn(() => ({
-        single: vi.fn(() => Promise.resolve({ 
-          data: { id: 'test-version-id' }, 
-          error: null 
-        }))
-      }))
-    })),
-    update: vi.fn(() => ({
-      eq: vi.fn(() => Promise.resolve({ error: null }))
     }))
   })),
-  storage: {
-    from: vi.fn(() => ({
-      download: vi.fn(() => Promise.resolve({ 
-        data: new Blob(['test pdf content'], { type: 'application/pdf' }), 
-        error: null 
+  insert: vi.fn(() => ({
+    select: vi.fn(() => ({
+      single: vi.fn(() => Promise.resolve({
+        data: { id: 'test-version-id' },
+        error: null
       }))
     }))
+  })),
+  update: vi.fn(() => ({
+    eq: vi.fn(() => Promise.resolve({ error: null }))
+  }))
+};
+
+// Mock Supabase client
+const mockSupabase = {
+  from: vi.fn(() => mockFromResult),
+  storage: {
+    from: vi.fn(() => mockStorageFromResult)
   },
   functions: {
-    invoke: vi.fn(() => Promise.resolve({ 
-      data: { success: true, chunksProcessed: 5 }, 
-      error: null 
+    invoke: vi.fn(() => Promise.resolve({
+      data: { success: true, chunksProcessed: 5 },
+      error: null
     }))
   }
 };
@@ -52,19 +58,38 @@ global.fetch = vi.fn();
 describe('PDF Processing Pipeline', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+
+    // Reset mock methods to default implementations
+    mockStorageFromResult.upload = vi.fn(() => Promise.resolve({ error: null }));
+    mockStorageFromResult.download = vi.fn(() => Promise.resolve({
+      data: new Blob(['test pdf content'], { type: 'application/pdf' }),
+      error: null
+    }));
+
+    mockFromResult.select = vi.fn(() => ({
+      eq: vi.fn(() => ({
+        single: vi.fn(() => Promise.resolve({
+          data: {
+            id: 'test-doc-id',
+            title: 'Test Document',
+            storage_path: 'test/path.pdf',
+            latest_version: 1,
+            processing_status: 'pending'
+          },
+          error: null
+        }))
+      }))
+    }));
   });
 
   describe('Document Upload and Processing Trigger', () => {
     it('should upload document and trigger processing', async () => {
       const file = new File(['test content'], 'test.pdf', { type: 'application/pdf' });
-      
-      // Mock successful upload
-      mockSupabase.storage.from().upload = vi.fn(() => Promise.resolve({ error: null }));
-      
+
       // Simulate upload process
       const uploadResult = await mockSupabase.storage.from('documents').upload('test/path.pdf', file);
       expect(uploadResult.error).toBeNull();
-      
+
       // Simulate document record creation
       const docResult = await mockSupabase.from('documents').insert({
         user_id: 'test-user',
@@ -73,15 +98,15 @@ describe('PDF Processing Pipeline', () => {
         title: 'test',
         mime: 'application/pdf',
         processing_status: 'pending'
-      });
-      
+      }).select().single();
+
       expect(docResult.data).toBeDefined();
-      
+
       // Simulate processing trigger
       const processResult = await mockSupabase.functions.invoke('process-document', {
         body: { documentId: 'test-doc-id' }
       });
-      
+
       expect(processResult.data.success).toBe(true);
       expect(processResult.data.chunksProcessed).toBe(5);
     });
@@ -95,10 +120,12 @@ describe('PDF Processing Pipeline', () => {
     });
 
     it('should handle file size validation', () => {
-      const largeFile = new File(['x'.repeat(51 * 1024 * 1024)], 'large.pdf', { type: 'application/pdf' });
-      
-      // Simulate size validation (50MB limit)
-      const isValidSize = largeFile.size <= 50 * 1024 * 1024;
+      const file = new File([new ArrayBuffer(1)], 'large.pdf', { type: 'application/pdf' });
+      // Override size to simulate >10MB without heavy allocation
+      Object.defineProperty(file, 'size', { value: 11 * 1024 * 1024 });
+
+      // Simulate size validation (10MB limit)
+      const isValidSize = file.size <= 10 * 1024 * 1024;
       expect(isValidSize).toBe(false);
     });
   });
@@ -156,11 +183,12 @@ describe('PDF Processing Pipeline', () => {
       const apiKey = 'test-api-key';
       const agentEmbeddingModel = 'text-embedding-3-large'; // Agent's configured model
 
-      // Mock successful OpenAI response
+      // Mock successful OpenAI response with lightweight embedding
+      const mockEmbedding = Array.from({length: 3072}, () => 0.1); // Lightweight array creation
       (global.fetch as any).mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({
-          data: [{ embedding: new Array(3072).fill(0.1) }] // Different dimension for large model
+          data: [{ embedding: mockEmbedding }] // Different dimension for large model
         })
       });
 
@@ -223,11 +251,13 @@ describe('PDF Processing Pipeline', () => {
 
     it('should save chunks with embeddings and agent model info', async () => {
       const agentEmbeddingModel = 'text-embedding-3-small';
+      // Create lightweight embedding array
+      const mockEmbedding = Array.from({length: 1536}, () => 0.1);
       const chunkData = {
         document_id: 'test-doc-id',
         version_id: 'test-version-id',
         content: 'Test chunk content',
-        embedding: JSON.stringify(new Array(1536).fill(0.1)),
+        embedding: JSON.stringify(mockEmbedding),
         chunk_index: 0,
         token_count: 4,
         embedding_model: agentEmbeddingModel, // Store agent's configured model
@@ -241,20 +271,27 @@ describe('PDF Processing Pipeline', () => {
 
   describe('Error Handling', () => {
     it('should handle document not found', async () => {
-      mockSupabase.from().select().eq().single = vi.fn(() => 
-        Promise.resolve({ data: null, error: { message: 'Document not found' } })
-      );
-      
+      // Override the select method to return a chain that ends with error
+      mockFromResult.select = vi.fn(() => ({
+        eq: vi.fn(() => ({
+          single: vi.fn(() => Promise.resolve({
+            data: null,
+            error: { message: 'Document not found' }
+          }))
+        }))
+      }));
+
       const result = await mockSupabase.from('documents').select('*').eq('id', 'invalid-id').single();
       expect(result.error).toBeDefined();
       expect(result.data).toBeNull();
     });
 
     it('should handle storage download failure', async () => {
-      mockSupabase.storage.from().download = vi.fn(() => 
+      // Override the download method to return error
+      mockStorageFromResult.download = vi.fn(() =>
         Promise.resolve({ data: null, error: { message: 'File not found' } })
       );
-      
+
       const result = await mockSupabase.storage.from('documents').download('invalid/path.pdf');
       expect(result.error).toBeDefined();
       expect(result.data).toBeNull();

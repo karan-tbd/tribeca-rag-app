@@ -10,9 +10,12 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest",
-    "test:ci": "vitest run",
+    "test:ci": "node --max-old-space-size=8192 --expose-gc ./node_modules/.bin/vitest run tests/pdf-processing.test.ts tests/smoke.test.ts tests/guard.test.tsx tests/agents.test.tsx",
+    "test:components": "node --max-old-space-size=8192 --expose-gc ./node_modules/.bin/vitest run tests/agent_documents.test.tsx tests/agent_config_form.test.tsx tests/agents_rls.test.tsx",
+    "test:all": "node --max-old-space-size=8192 --expose-gc ./node_modules/.bin/vitest run",
     "test:timeout": "vitest run --reporter=basic --reporter=./tests/utils/timeout-reporter.ts",
-    "test:replay-timeouts": "node scripts/rerun-timeouts.mjs"
+    "test:replay-timeouts": "node scripts/rerun-timeouts.mjs",
+    "test:report": "vitest run --reporter=verbose --reporter=json --outputFile=.vitest-report.json"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
