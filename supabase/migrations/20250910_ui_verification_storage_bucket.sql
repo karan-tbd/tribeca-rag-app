@@ -8,7 +8,8 @@ BEGIN
     SELECT 1 FROM storage.buckets WHERE id = 'documents'
   ) THEN
     INSERT INTO storage.buckets (id, name, public)
-    VALUES ('documents', 'documents', false);
+    VALUES ('documents', 'documents', FALSE)
+    ON CONFLICT (id) DO NOTHING;
   END IF;
 END $$;
 

@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
+import { ENABLE_PROCESSING_PROGRESS_TOASTS } from "@/config/featureFlags";
+import AgentDocuments from "@/components/agents/AgentDocuments";
 
 export default function Documents() {
   const { user } = useAuth();
@@ -33,6 +35,52 @@ export default function Documents() {
       if (ags && ags.length > 0) setAgentId(ags[0].id);
     })();
   }, [user]);
+  // Fire-and-forget progress toasts for processing, behind a flag
+  const startProcessingToasts = (documentId: string) => {
+    if (!ENABLE_PROCESSING_PROGRESS_TOASTS) return () => {};
+    toast({ title: "Starting PDF processing…" });
+
+    const timers: number[] = [];
+    const schedule = [
+      { ms: 800, title: "Processing 10%" },
+      { ms: 2000, title: "Processing 25%" },
+      { ms: 4500, title: "Processing 50%" },
+      { ms: 8000, title: "Processing 75%" },
+      { ms: 11000, title: "Processing 90%" },
+    ];
+
+    schedule.forEach(s => {
+      const id = window.setTimeout(() => toast({ title: s.title }), s.ms);
+      timers.push(id);
+    });
+
+    const channel = supabase
+      .channel(`doc-progress-${documentId}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'documents', filter: `id=eq.${documentId}` }, (payload) => {
+        const status = (payload.new as any)?.processing_status as string | undefined;
+        if (!status) return;
+        if (status === 'processed') {
+          toast({ title: 'Processing complete. Ready for search.' });
+          cleanup();
+        } else if (status === 'failed') {
+          const err = (payload.new as any)?.processing_error || 'Processing failed';
+          toast({ title: 'Processing failed', description: String(err) });
+          cleanup();
+        }
+      })
+      .subscribe();
+
+    const cleanup = () => {
+      timers.forEach(t => clearTimeout(t));
+      try { channel.unsubscribe(); } catch {}
+    };
+
+    const hardTimeout = window.setTimeout(() => cleanup(), 60000);
+    timers.push(hardTimeout);
+
+    return cleanup;
+  };
+
 
   const onUpload = async () => {
     if (!user || !file || !agentId) return;
@@ -66,7 +114,10 @@ export default function Documents() {
         await supabase.functions.invoke('process-document', {
           body: { documentId: data.id }
         });
-        toast({ title: "Processing", description: "Document is being processed for search." });
+        if (ENABLE_PROCESSING_PROGRESS_TOASTS) {
+          toast({ title: "Processing", description: "Document is being processed for search." });
+        }
+        startProcessingToasts(data.id);
       } catch (processError) {
         console.error('Processing failed:', processError);
         toast({ title: "Warning", description: "Upload succeeded but processing failed." });
@@ -106,31 +157,12 @@ export default function Documents() {
                   <option key={a.id} value={a.id}>{a.name}</option>
                 ))}
               </select>
-              <Input type="file" accept="application/pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-              <Button disabled={!canUpload || uploading} onClick={onUpload}>
-                {uploading ? "Uploading…" : "Upload PDF"}
-              </Button>
             </div>
           )}
         </div>
 
         <div className="space-y-2">
-          <h2 className="text-lg font-medium">Your documents</h2>
-          {documents.length === 0 ? (
-            <div className="text-sm text-muted-foreground">No documents yet.</div>
-          ) : (
-            <ul className="divide-y border rounded">
-              {documents.map((d) => (
-                <li key={d.id} className="p-3 text-sm flex items-center justify-between">
-                  <div>
-                    <div className="font-medium">{d.title}</div>
-                    <div className="text-muted-foreground text-xs">Agent: {d.agent?.name || 'Unknown'}</div>
-                  </div>
-                  <span className="text-muted-foreground">{new Date(d.created_at).toLocaleString()}</span>
-                </li>
-              ))}
-            </ul>
-          )}
+          <AgentDocuments agentId={agentId} />
         </div>
       </main>
     </div>

@@ -160,7 +160,7 @@ RAG-2 (Row-Level Security Setup)
 Users need an intuitive way to upload PDF documents and manage their document library with version control.
 
 ### Acceptance Criteria
-- [ ] Drag-and-drop upload area for PDF files (≤50MB)
+- [ ] Drag-and-drop upload area for PDF files (≤10MB)
 - [ ] Re-embed checkbox with tooltip explaining when to use
 - [ ] Upload progress indicator with percentage and cancel option
 - [ ] File validation (PDF only, size limit) with clear error messages
