@@ -184,6 +184,7 @@ export type Database = {
           chunk_index: number
           created_at: string | null
           document_id: string
+          embedding_model: string | null
           id: string
           page_end: number
           page_start: number
@@ -194,6 +195,7 @@ export type Database = {
           chunk_index: number
           created_at?: string | null
           document_id: string
+          embedding_model?: string | null
           id?: string
           page_end: number
           page_start: number
@@ -204,6 +206,7 @@ export type Database = {
           chunk_index?: number
           created_at?: string | null
           document_id?: string
+          embedding_model?: string | null
           id?: string
           page_end?: number
           page_start?: number
