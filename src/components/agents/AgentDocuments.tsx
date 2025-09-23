@@ -9,19 +9,9 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { ENABLE_PROCESSING_PROGRESS_TOASTS } from "@/config/featureFlags";
 import { Upload, FileText, Trash2, Calendar, Clock, CheckCircle, XCircle, AlertCircle, RefreshCw } from "lucide-react";
+import type { Database } from "@/integrations/supabase/types";
 
-interface Document {
-  id: string;
-  title: string;
-  storage_path: string;
-  mime: string;
-  created_at: string;
-  latest_version: number;
-  processing_status: 'pending' | 'processing' | 'processed' | 'failed';
-  processed_at?: string;
-  chunk_count: number;
-  processing_error?: string;
-  processing_started_at?: string;
+type Document = Database['public']['Tables']['documents']['Row'] & {
   embedding_model?: string; // Will be populated from chunks
 }
 
