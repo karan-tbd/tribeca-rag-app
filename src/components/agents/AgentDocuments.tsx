@@ -4,8 +4,10 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { Upload, FileText, Trash2, Calendar } from "lucide-react";
+import { Upload, FileText, Trash2, Calendar, Clock, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 
 interface Document {
   id: string;
@@ -14,6 +16,12 @@ interface Document {
   mime: string;
   created_at: string;
   latest_version: number;
+  processing_status: 'pending' | 'processing' | 'processed' | 'failed';
+  processed_at?: string;
+  chunk_count: number;
+  processing_error?: string;
+  processing_started_at?: string;
+  embedding_model?: string; // Will be populated from chunks
 }
 
 interface AgentDocumentsProps {
@@ -46,7 +54,25 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
           .order("created_at", { ascending: false });
 
         if (error) throw error;
-        setDocuments(data || []);
+
+        // For processed documents, get the embedding model from chunks
+        const documentsWithEmbeddingInfo = await Promise.all(
+          (data || []).map(async (doc) => {
+            if (doc.processing_status === 'processed' && doc.chunk_count > 0) {
+              const { data: chunk } = await supabase
+                .from("chunks")
+                .select("embedding_model")
+                .eq("document_id", doc.id)
+                .limit(1)
+                .single();
+
+              return { ...doc, embedding_model: chunk?.embedding_model };
+            }
+            return doc;
+          })
+        );
+
+        setDocuments(documentsWithEmbeddingInfo);
       } catch (error) {
         console.error("Failed to load documents:", error);
         toast.error("Failed to load documents");
@@ -56,6 +82,34 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
     };
 
     loadDocuments();
+
+    // Set up real-time subscription for document status updates
+    const subscription = supabase
+      .channel('document_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'documents',
+          filter: `agent_id=eq.${agentId}`
+        },
+        (payload) => {
+          console.log('Document updated:', payload);
+          setDocuments(prev =>
+            prev.map(doc =>
+              doc.id === payload.new.id
+                ? { ...doc, ...payload.new }
+                : doc
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [user, agentId]);
 
   const clearFileInput = () => {
@@ -63,6 +117,48 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
+  };
+
+  // Helper function to get status badge
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'processing':
+        return (
+          <Badge variant="secondary" className="flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            Processing...
+          </Badge>
+        );
+      case 'processed':
+        return (
+          <Badge variant="default" className="flex items-center gap-1 bg-green-100 text-green-800">
+            <CheckCircle className="h-3 w-3" />
+            Ready
+          </Badge>
+        );
+      case 'failed':
+        return (
+          <Badge variant="destructive" className="flex items-center gap-1">
+            <XCircle className="h-3 w-3" />
+            Failed
+          </Badge>
+        );
+      default:
+        return (
+          <Badge variant="outline" className="flex items-center gap-1">
+            <AlertCircle className="h-3 w-3" />
+            Pending
+          </Badge>
+        );
+    }
+  };
+
+  // Helper function to get processing progress
+  const getProcessingProgress = (document: Document) => {
+    if (document.processing_status === 'processed') return 100;
+    if (document.processing_status === 'processing') return 50;
+    if (document.processing_status === 'failed') return 0;
+    return 0;
   };
 
   const handleUpload = async () => {
@@ -78,9 +174,9 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
         return;
       }
 
-      // Validate file size (50MB limit)
-      if (file.size > 50 * 1024 * 1024) {
-        toast.error("File size must be less than 50MB");
+      // Validate file size (10MB limit)
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error("File size must be less than 10MB");
         clearFileInput();
         return;
       }
@@ -97,7 +193,7 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
 
       if (storageError) throw storageError;
 
-      // Create document record
+      // Create document record with initial processing status
       const title = file.name.replace(/\.[^.]+$/, "");
       const { data, error: dbError } = await supabase
         .from("documents")
@@ -107,6 +203,8 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
           storage_path: path,
           title,
           mime: file.type,
+          processing_status: 'pending',
+          chunk_count: 0
         })
         .select()
         .single();
@@ -117,13 +215,19 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
 
       // Trigger document processing
       try {
-        await supabase.functions.invoke("process-document", {
+        const { data: processResult, error: processError } = await supabase.functions.invoke("process-document", {
           body: { documentId: data.id },
         });
-        toast.success("Document is being processed for search");
+
+        if (processError) {
+          console.error("Processing invocation failed:", processError);
+          toast.error("Upload succeeded but processing failed to start");
+        } else {
+          toast.success("Document is being processed for search");
+        }
       } catch (processError) {
         console.error("Processing failed:", processError);
-        toast.error("Upload succeeded but processing failed");
+        toast.error("Upload succeeded but processing failed to start");
       }
 
       // Refresh documents list and clear file input
@@ -228,7 +332,7 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Upload PDF files (max 50MB) to add knowledge to this agent.
+            Upload PDF files (max 10MB) to add knowledge to this agent.
           </p>
         </div>
 
@@ -240,32 +344,71 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
             No documents uploaded yet. Upload a PDF to get started.
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {documents.map((document) => (
               <div
                 key={document.id}
-                className="flex items-center justify-between p-3 border rounded-lg"
+                className="p-4 border rounded-lg space-y-3"
               >
-                <div className="flex items-center gap-3">
-                  <FileText className="h-4 w-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm font-medium">{document.title}</p>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Calendar className="h-3 w-3" />
-                      {formatDate(document.created_at)}
-                      <span>•</span>
-                      <span>v{document.latest_version}</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm font-medium">{document.title}</p>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Calendar className="h-3 w-3" />
+                        {formatDate(document.created_at)}
+                        <span>•</span>
+                        <span>v{document.latest_version}</span>
+                        {document.chunk_count > 0 && (
+                          <>
+                            <span>•</span>
+                            <span>{document.chunk_count} chunks</span>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
+                  <div className="flex items-center gap-2">
+                    {getStatusBadge(document.processing_status)}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDelete(document)}
+                      className="text-destructive hover:text-destructive"
+                      disabled={document.processing_status === 'processing'}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleDelete(document)}
-                  className="text-destructive hover:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+
+                {/* Processing progress bar */}
+                {document.processing_status === 'processing' && (
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Processing document...</span>
+                      <span>{getProcessingProgress(document)}%</span>
+                    </div>
+                    <Progress value={getProcessingProgress(document)} className="h-2" />
+                  </div>
+                )}
+
+                {/* Error message */}
+                {document.processing_status === 'failed' && document.processing_error && (
+                  <div className="text-xs text-red-600 bg-red-50 p-2 rounded">
+                    <strong>Processing failed:</strong> {document.processing_error}
+                  </div>
+                )}
+
+                {/* Success info */}
+                {document.processing_status === 'processed' && document.processed_at && (
+                  <div className="text-xs text-green-600 bg-green-50 p-2 rounded">
+                    <strong>Processed successfully</strong> on {formatDate(document.processed_at)}
+                    {document.chunk_count > 0 && ` • ${document.chunk_count} chunks created`}
+                    {document.embedding_model && ` • Using ${document.embedding_model}`}
+                  </div>
+                )}
               </div>
             ))}
           </div>

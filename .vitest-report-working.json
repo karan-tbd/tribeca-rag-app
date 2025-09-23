@@ -1,0 +1,278 @@
+{
+    "numTotalTestSuites": 14,
+    "numPassedTestSuites": 14,
+    "numFailedTestSuites": 0,
+    "numPendingTestSuites": 0,
+    "numTotalTests": 18,
+    "numPassedTests": 18,
+    "numFailedTests": 0,
+    "numPendingTests": 0,
+    "numTodoTests": 0,
+    "snapshot": {
+        "added": 0,
+        "failure": false,
+        "filesAdded": 0,
+        "filesRemoved": 0,
+        "filesRemovedList": [],
+        "filesUnmatched": 0,
+        "filesUpdated": 0,
+        "matched": 0,
+        "total": 0,
+        "unchecked": 0,
+        "uncheckedKeysByFile": [],
+        "unmatched": 0,
+        "updated": 0,
+        "didUpdate": false
+    },
+    "startTime": 1758274508234,
+    "success": true,
+    "testResults": [
+        {
+            "assertionResults": [
+                {
+                    "ancestorTitles": [
+                        "Agents page"
+                    ],
+                    "fullName": "Agents page renders the user's agents list",
+                    "status": "passed",
+                    "title": "renders the user's agents list",
+                    "duration": 33.39233300000001,
+                    "failureMessages": [],
+                    "meta": {}
+                }
+            ],
+            "startTime": 1758274508970,
+            "endTime": 1758274509003.3923,
+            "status": "passed",
+            "message": "",
+            "name": "/Users/mandalamkaran/Documents/GitHub/tribeca-rag-app/tests/agents.test.tsx"
+        },
+        {
+            "assertionResults": [
+                {
+                    "ancestorTitles": [
+                        "ProtectedRoute"
+                    ],
+                    "fullName": "ProtectedRoute redirects unauthenticated users to /login",
+                    "status": "passed",
+                    "title": "redirects unauthenticated users to /login",
+                    "duration": 13.927249999999958,
+                    "failureMessages": [],
+                    "meta": {}
+                }
+            ],
+            "startTime": 1758274508923,
+            "endTime": 1758274508936.9272,
+            "status": "passed",
+            "message": "",
+            "name": "/Users/mandalamkaran/Documents/GitHub/tribeca-rag-app/tests/guard.test.tsx"
+        },
+        {
+            "assertionResults": [
+                {
+                    "ancestorTitles": [
+                        "PDF Processing Pipeline",
+                        "Document Upload and Processing Trigger"
+                    ],
+                    "fullName": "PDF Processing Pipeline Document Upload and Processing Trigger should upload document and trigger processing",
+                    "status": "passed",
+                    "title": "should upload document and trigger processing",
+                    "duration": 1.3071669999999358,
+                    "failureMessages": [],
+                    "meta": {}
+                },
+                {
+                    "ancestorTitles": [
+                        "PDF Processing Pipeline",
+                        "Document Upload and Processing Trigger"
+                    ],
+                    "fullName": "PDF Processing Pipeline Document Upload and Processing Trigger should handle file type validation",
+                    "status": "passed",
+                    "title": "should handle file type validation",
+                    "duration": 0.18716599999993377,
+                    "failureMessages": [],
+                    "meta": {}
+                },
+                {
+                    "ancestorTitles": [
+                        "PDF Processing Pipeline",
+                        "Document Upload and Processing Trigger"
+                    ],
+                    "fullName": "PDF Processing Pipeline Document Upload and Processing Trigger should handle file size validation",
+                    "status": "passed",
+                    "title": "should handle file size validation",
+                    "duration": 0.109958000000006,
+                    "failureMessages": [],
+                    "meta": {}
+                },
+                {
+                    "ancestorTitles": [
+                        "PDF Processing Pipeline",
+                        "Text Extraction and Chunking"
+                    ],
+                    "fullName": "PDF Processing Pipeline Text Extraction and Chunking should extract text from PDF blob",
+                    "status": "passed",
+                    "title": "should extract text from PDF blob",
+                    "duration": 0.15649999999993724,
+                    "failureMessages": [],
+                    "meta": {}
+                },
+                {
+                    "ancestorTitles": [
+                        "PDF Processing Pipeline",
+                        "Text Extraction and Chunking"
+                    ],
+                    "fullName": "PDF Processing Pipeline Text Extraction and Chunking should create semantic chunks with overlap",
+                    "status": "passed",
+                    "title": "should create semantic chunks with overlap",
+                    "duration": 0.24091599999997015,
+                    "failureMessages": [],
+                    "meta": {}
+                },
+                {
+                    "ancestorTitles": [
+                        "PDF Processing Pipeline",
+                        "Text Extraction and Chunking"
+                    ],
+                    "fullName": "PDF Processing Pipeline Text Extraction and Chunking should estimate token count correctly",
+                    "status": "passed",
+                    "title": "should estimate token count correctly",
+                    "duration": 0.10087499999997362,
+                    "failureMessages": [],
+                    "meta": {}
+                },
+                {
+                    "ancestorTitles": [
+                        "PDF Processing Pipeline",
+                        "Embedding Generation"
+                    ],
+                    "fullName": "PDF Processing Pipeline Embedding Generation should generate embeddings with agent-configured model",
+                    "status": "passed",
+                    "title": "should generate embeddings with agent-configured model",
+                    "duration": 0.5282500000000709,
+                    "failureMessages": [],
+                    "meta": {}
+                },
+                {
+                    "ancestorTitles": [
+                        "PDF Processing Pipeline",
+                        "Embedding Generation"
+                    ],
+                    "fullName": "PDF Processing Pipeline Embedding Generation should handle API errors with retry",
+                    "status": "passed",
+                    "title": "should handle API errors with retry",
+                    "duration": 0.24424999999996544,
+                    "failureMessages": [],
+                    "meta": {}
+                },
+                {
+                    "ancestorTitles": [
+                        "PDF Processing Pipeline",
+                        "Database Operations"
+                    ],
+                    "fullName": "PDF Processing Pipeline Database Operations should update document processing status",
+                    "status": "passed",
+                    "title": "should update document processing status",
+                    "duration": 0.42041600000004564,
+                    "failureMessages": [],
+                    "meta": {}
+                },
+                {
+                    "ancestorTitles": [
+                        "PDF Processing Pipeline",
+                        "Database Operations"
+                    ],
+                    "fullName": "PDF Processing Pipeline Database Operations should save chunks with embeddings and agent model info",
+                    "status": "passed",
+                    "title": "should save chunks with embeddings and agent model info",
+                    "duration": 0.13125000000002274,
+                    "failureMessages": [],
+                    "meta": {}
+                },
+                {
+                    "ancestorTitles": [
+                        "PDF Processing Pipeline",
+                        "Error Handling"
+                    ],
+                    "fullName": "PDF Processing Pipeline Error Handling should handle document not found",
+                    "status": "passed",
+                    "title": "should handle document not found",
+                    "duration": 0.11945800000000872,
+                    "failureMessages": [],
+                    "meta": {}
+                },
+                {
+                    "ancestorTitles": [
+                        "PDF Processing Pipeline",
+                        "Error Handling"
+                    ],
+                    "fullName": "PDF Processing Pipeline Error Handling should handle storage download failure",
+                    "status": "passed",
+                    "title": "should handle storage download failure",
+                    "duration": 0.08537499999999909,
+                    "failureMessages": [],
+                    "meta": {}
+                },
+                {
+                    "ancestorTitles": [
+                        "PDF Processing Pipeline",
+                        "Error Handling"
+                    ],
+                    "fullName": "PDF Processing Pipeline Error Handling should handle processing function errors",
+                    "status": "passed",
+                    "title": "should handle processing function errors",
+                    "duration": 0.17050000000006094,
+                    "failureMessages": [],
+                    "meta": {}
+                },
+                {
+                    "ancestorTitles": [
+                        "UI Integration"
+                    ],
+                    "fullName": "UI Integration should display correct status badges",
+                    "status": "passed",
+                    "title": "should display correct status badges",
+                    "duration": 0.10745799999995143,
+                    "failureMessages": [],
+                    "meta": {}
+                },
+                {
+                    "ancestorTitles": [
+                        "UI Integration"
+                    ],
+                    "fullName": "UI Integration should calculate processing progress correctly",
+                    "status": "passed",
+                    "title": "should calculate processing progress correctly",
+                    "duration": 0.06870900000001257,
+                    "failureMessages": [],
+                    "meta": {}
+                }
+            ],
+            "startTime": 1758274508851,
+            "endTime": 1758274508855.1704,
+            "status": "passed",
+            "message": "",
+            "name": "/Users/mandalamkaran/Documents/GitHub/tribeca-rag-app/tests/pdf-processing.test.ts"
+        },
+        {
+            "assertionResults": [
+                {
+                    "ancestorTitles": [
+                        "smoke"
+                    ],
+                    "fullName": "smoke works",
+                    "status": "passed",
+                    "title": "works",
+                    "duration": 0.48691699999994853,
+                    "failureMessages": [],
+                    "meta": {}
+                }
+            ],
+            "startTime": 1758274508849,
+            "endTime": 1758274508849.4868,
+            "status": "passed",
+            "message": "",
+            "name": "/Users/mandalamkaran/Documents/GitHub/tribeca-rag-app/tests/smoke.test.ts"
+        }
+    ]
+}
