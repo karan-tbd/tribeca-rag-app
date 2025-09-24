@@ -243,6 +243,21 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
         return;
       }
 
+      // Verify selected agent exists and belongs to the current user
+      const { data: agentRow, error: agentCheckError } = await supabase
+        .from("agents")
+        .select("id")
+        .eq("id", agentId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (agentCheckError) throw agentCheckError;
+      if (!agentRow) {
+        toast.error("Agent not found. Please save or re-select an agent before uploading.");
+        clearFileInput();
+        setUploading(false);
+        return;
+      }
+
       // Upload to storage
       const path = `${user.id}/${Date.now()}-${file.name}`;
       const { error: storageError } = await supabase.storage

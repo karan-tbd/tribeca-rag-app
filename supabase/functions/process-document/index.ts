@@ -212,7 +212,9 @@ async function extractPdfText(fileData: Blob): Promise<string> {
     try {
       // Disable worker in Edge runtime context
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (pdfjsLib as any).GlobalWorkerOptions && (((pdfjsLib as any).GlobalWorkerOptions.workerSrc) = '');
+      if ((pdfjsLib as any).GlobalWorkerOptions) {
+        (pdfjsLib as any).GlobalWorkerOptions.workerSrc = '';
+      }
     } catch (_) {}
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const loadingTask = (pdfjsLib as any).getDocument({ data: uint8, useSystemFonts: true, isEvalSupported: false });
