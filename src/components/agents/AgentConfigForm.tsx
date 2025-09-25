@@ -8,6 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
+import { Info } from "lucide-react";
+
 import AgentDocuments from "./AgentDocuments";
 
 interface AgentConfigFormProps {
@@ -22,11 +25,11 @@ export default function AgentConfigForm({ agentId: propAgentId, onSave }: AgentC
 
   useEffect(() => {
     setAgentId(propAgentId || null);
-    
+
     if (!user) return;
-    
+
     if (propAgentId) {
-      // Load specific agent
+      // Load specific agent. If it doesn't exist (e.g., after local DB reset), treat as new.
       (async () => {
         const { data, error } = await supabase
           .from("agents")
@@ -48,6 +51,9 @@ export default function AgentConfigForm({ agentId: propAgentId, onSave }: AgentC
             sim_threshold: data.sim_threshold ?? 0.75,
             fail_safe_threshold: data.fail_safe_threshold ?? 0.5,
           });
+        } else {
+          // Agent ID was provided but not found. Clear selection to prevent FK errors when uploading docs.
+          setAgentId(null);
         }
       })();
     } else {
@@ -110,8 +116,22 @@ export default function AgentConfigForm({ agentId: propAgentId, onSave }: AgentC
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="text-sm font-medium">Embedding Model</label>
-            <Input {...form.register("embed_model")} placeholder="text-embedding-3-small" />
+            <label className="text-sm font-medium flex items-center gap-1">
+              Embedding Model
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3 w-3 text-muted-foreground cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Generalized provider/model selection is planned per docs/openrouter_integration_plan. For now, the app uses OpenAI
+                    text-embedding-3-small for indexing and queries. Changing this value has no effect yet.
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </label>
+            <Input {...form.register("embed_model")} placeholder="text-embedding-3-small" readOnly className="bg-muted/50 cursor-not-allowed" />
+            <p className="text-xs text-muted-foreground mt-1">Currently fixed to OpenAI text-embedding-3-small</p>
           </div>
           <div>
             <label className="text-sm font-medium">Generation Model</label>

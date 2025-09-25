@@ -1,6 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { getSupabaseAdmin, env } from "../_shared/supabase.ts";
 import * as pdfjsLib from 'https://esm.sh/pdfjs-dist@3.11.174/build/pdf.mjs';
 
 
@@ -28,12 +28,9 @@ serve(async (req: Request) => {
       });
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const openaiKey = Deno.env.get('OPENAI_API_KEY') || '';
-    const embedModel = Deno.env.get('EMBEDDING_MODEL_FALLBACK') || 'text-embedding-3-small';
-
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabase = getSupabaseAdmin();
+    const openaiKey = env('OPENAI_API_KEY') || '';
+    const embedModel = env('EMBEDDING_MODEL_FALLBACK') || 'text-embedding-3-small';
 
     // Get document info
     const { data: doc, error: docError } = await supabase
@@ -189,9 +186,7 @@ serve(async (req: Request) => {
     console.error('Error processing document:', error);
     try {
       // Best-effort attempt to mark document as failed
-      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-      const admin = createClient(supabaseUrl, supabaseServiceKey);
+      const admin = getSupabaseAdmin();
       const body = await req.clone().json().catch(() => ({}));
       if (body?.documentId) {
         const { error: statusErr } = await admin.rpc('update_document_processing_status', { doc_id: body.documentId, status: 'failed', error_msg: String((error as any)?.message || error) });
@@ -212,7 +207,9 @@ async function extractPdfText(fileData: Blob): Promise<string> {
     try {
       // Disable worker in Edge runtime context
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (pdfjsLib as any).GlobalWorkerOptions && (((pdfjsLib as any).GlobalWorkerOptions.workerSrc) = '');
+      if ((pdfjsLib as any).GlobalWorkerOptions) {
+        (pdfjsLib as any).GlobalWorkerOptions.workerSrc = '';
+      }
     } catch (_) {}
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const loadingTask = (pdfjsLib as any).getDocument({ data: uint8, useSystemFonts: true, isEvalSupported: false });

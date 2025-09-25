@@ -1,0 +1,172 @@
+# Development Prompt: OpenRouter Integration for Universal Model Support
+
+## 🎯 Objective
+Integrate OpenRouter API to enable users to select any embedding and generation model from any provider (OpenAI, Anthropic, Cohere, etc.) through a single API key, while maintaining full backward compatibility with existing functionality.
+
+## 🔒 Critical Requirements
+- **ZERO BREAKING CHANGES**: All existing agents, documents, and functionality must continue working exactly as before
+- **Backward Compatibility**: Existing OpenAI-based agents should work without modification
+- **Graceful Fallback**: If OpenRouter fails, fall back to existing OpenAI implementation
+- **Feature Flag Controlled**: Entire feature behind `ENABLE_OPENROUTER` flag
+- **Database Safe**: No destructive schema changes
+
+## 📋 Implementation Plan
+
+### Phase 1: Infrastructure Setup (Non-Breaking)
+1. **Add OpenRouter service alongside existing OpenAI service**
+   - Create `supabase/functions/shared/openrouter-service.ts`
+   - Keep existing `openai-service.ts` intact
+   - Add feature flag `ENABLE_OPENROUTER=false` by default
+
+2. **Extend database schema (additive only)**
+   ```sql
+   -- Add new optional columns, don't modify existing ones
+   ALTER TABLE public.agents ADD COLUMN openrouter_embed_model TEXT;
+   ALTER TABLE public.agents ADD COLUMN openrouter_gen_model TEXT;
+   ALTER TABLE public.chunks ADD COLUMN embedding_provider TEXT DEFAULT 'openai';
+   ```
+
+3. **Add environment variables**
+   ```bash
+   # New variables (optional)
+   OPENROUTER_API_KEY=
+   ENABLE_OPENROUTER=false
+   
+   # Keep existing (required for backward compatibility)
+   OPENAI_API_KEY=sk-...
+   ```
+
+### Phase 2: Service Layer (Dual Support)
+4. **Create unified embedding service**
+   ```typescript
+   // Route to appropriate service based on agent config and feature flags
+   export async function generateEmbedding(text: string, agent: Agent): Promise<number[]> {
+     if (ENABLE_OPENROUTER && agent.openrouter_embed_model) {
+       return generateOpenRouterEmbedding(text, agent.openrouter_embed_model);
+     }
+     // Fallback to existing OpenAI logic
+     return generateOpenAIEmbedding(text, agent.embed_model);
+   }
+   ```
+
+5. **Update edge functions with dual support**
+   - Modify `process-document/index.ts` to check for OpenRouter models first
+   - Modify `query-agent/index.ts` with same dual logic
+   - Keep all existing OpenAI code paths active
+
+### Phase 3: Frontend Enhancement (Optional UI)
+6. **Add OpenRouter model selection (behind feature flag)**
+   ```typescript
+   // Only show OpenRouter options if feature enabled
+   {ENABLE_OPENROUTER && (
+     <div className="space-y-4">
+       <h3>Advanced Model Selection</h3>
+       <ModelSelect type="openrouter-embedding" />
+       <ModelSelect type="openrouter-completion" />
+     </div>
+   )}
+   ```
+
+7. **Create model catalog component**
+   - Fetch available models from OpenRouter API
+   - Group by provider (OpenAI, Anthropic, Cohere, etc.)
+   - Show pricing and capabilities
+
+### Phase 4: Migration Strategy (User Opt-in)
+8. **Agent-level migration**
+   - Add "Upgrade to OpenRouter" button in agent config
+   - Copy existing model settings to OpenRouter fields
+   - Allow users to test before switching
+
+9. **Validation and testing**
+   - Compare embedding outputs between OpenAI and OpenRouter
+   - Ensure vector similarity scores remain consistent
+   - Test with existing documents and queries
+
+## 🧪 Testing Strategy
+
+### Backward Compatibility Tests
+```typescript
+describe('OpenRouter Integration', () => {
+  it('should not affect existing OpenAI agents', async () => {
+    // Test existing agent continues working exactly as before
+  });
+  
+  it('should fall back to OpenAI if OpenRouter fails', async () => {
+    // Test graceful degradation
+  });
+  
+  it('should maintain vector similarity scores', async () => {
+    // Ensure search results remain consistent
+  });
+});
+```
+
+### Feature Flag Tests
+- Test with `ENABLE_OPENROUTER=false` (should be identical to current behavior)
+- Test with `ENABLE_OPENROUTER=true` but no OpenRouter models selected
+- Test full OpenRouter functionality
+
+## 🚀 Deployment Strategy
+
+### Stage 1: Infrastructure (Week 1)
+- Deploy database schema changes
+- Add environment variables
+- Deploy OpenRouter service (unused)
+- **Verify**: No user-facing changes
+
+### Stage 2: Backend Integration (Week 2)
+- Deploy dual-service edge functions
+- Enable feature flag in staging only
+- **Verify**: Existing functionality unchanged in production
+
+### Stage 3: Frontend Enhancement (Week 3)
+- Deploy OpenRouter UI components (hidden by default)
+- Enable feature flag for beta users
+- **Verify**: Non-beta users see no changes
+
+### Stage 4: Gradual Rollout (Week 4)
+- Enable for all users
+- Monitor performance and error rates
+- **Verify**: Smooth transition with rollback capability
+
+## 📊 Success Metrics
+- **Zero regression**: No increase in error rates for existing functionality
+- **Performance**: OpenRouter response times within 10% of OpenAI
+- **Adoption**: 20% of users try OpenRouter models within first month
+- **Reliability**: 99.9% uptime with graceful fallbacks
+
+## 🔄 Rollback Plan
+1. **Immediate**: Set `ENABLE_OPENROUTER=false`
+2. **Database**: All OpenRouter columns are optional/nullable
+3. **Code**: All OpenAI code paths remain intact
+4. **Users**: Existing agents continue working without interruption
+
+## 📝 Implementation Checklist
+- [ ] Create OpenRouter service module
+- [ ] Add database schema (additive only)
+- [ ] Update edge functions with dual support
+- [ ] Add feature flag controls
+- [ ] Create model selection UI
+- [ ] Write comprehensive tests
+- [ ] Deploy with feature flag disabled
+- [ ] Test in staging environment
+- [ ] Enable for beta users
+- [ ] Monitor and iterate
+- [ ] Full rollout
+
+## 🎯 Definition of Done
+- All existing functionality works identically
+- Users can select any OpenRouter model
+- Graceful fallback to OpenAI if needed
+- Comprehensive test coverage
+- Feature flag controls deployment
+- Documentation updated
+- Zero production incidents during rollout
+
+---
+
+**Priority**: Enhancement (not urgent)
+**Risk Level**: Medium (due to complexity, mitigated by backward compatibility)
+**Estimated Effort**: 3-4 weeks
+**Dependencies**: None (fully additive feature)

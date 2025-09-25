@@ -1,73 +1,77 @@
-# Welcome to your Lovable project
+# Tribeca RAG App
 
-## Project info
+A production‑oriented Retrieval‑Augmented Generation (RAG) web application built with React (Vite + TypeScript), Supabase (Postgres, Storage, Edge Functions, RLS, pgvector), Tailwind CSS, and shadcn/ui.
 
-**URL**: https://lovable.dev/projects/a4155aa1-26b7-4b24-b772-82289a60f9e8
+## Features
+- Authentication: Google and Microsoft login (Supabase Auth)
+- Agent management: create/update/delete agents with validation and RLS
+- Document ingestion: PDF upload (≤10MB), status updates via Realtime
+- Processing pipeline: pdf.js extraction → chunking → embeddings → stored in Postgres (pgvector)
+- Chat (MVP UI present): end‑to‑end chat is currently non‑functional and deferred
 
-## How can I edit this code?
+See docs/project_status.md for the latest status, scope and next steps.
 
-There are several ways of editing your application.
+## Tech Stack
+- Frontend: React 18, Vite, TypeScript, React Router, shadcn/ui, Tailwind CSS
+- Backend: Supabase Postgres (+ RLS), Storage, Edge Functions, Realtime, pgvector
+- Testing: Vitest, @testing-library/react (happy‑dom)
 
-**Use Lovable**
+## Local Development
+Prerequisites:
+- Node.js 18+ (nvm recommended) and npm or bun
+- Supabase CLI if running local stack (optional): https://supabase.com/docs/guides/cli
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/a4155aa1-26b7-4b24-b772-82289a60f9e8) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
+Install deps:
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+# with npm
+npm install
+# or with bun
+bun install
 ```
 
-**Edit a file directly in GitHub**
+Environment:
+Create a `.env` file (and/or `.env.local`) with at least:
+```bash
+VITE_SUPABASE_URL=...
+VITE_SUPABASE_ANON_KEY=...
+# Edge Functions / server context
+SUPABASE_URL=...
+SUPABASE_SERVICE_ROLE_KEY=...
+OPENAI_API_KEY=...   # required for real embeddings in ingestion
+```
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+Run the app:
+```sh
+npm run dev    # or: bun run dev
+```
+- Dev server runs on http://localhost:8080 (see vite.config.ts)
 
-**Use GitHub Codespaces**
+Supabase (optional, local):
+```sh
+# start local supabase services
+supabase start
+# serve edge functions locally (in another terminal)
+supabase functions serve --no-verify-jwt
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Scripts
+- `dev` – start Vite dev server
+- `build` – production build
+- `preview` – preview the built app
+- `lint` – run eslint
+- `test` – run all tests
+- `test:ci` – run core tests (fast, stable)
+- `test:components` – run heavier UI tests
 
-## What technologies are used for this project?
+## Current Limitations
+- Chat features (Session Management, Prompt Assembly, full Chat UI) are not ready for use yet. Linear issues (KAR‑16/17/18) are in Backlog with notes.
 
-This project is built with:
+## Repository Structure (high‑level)
+- `/src` – application code (components, pages, integrations)
+- `/supabase/functions` – Edge Functions (`process-document`, `query-agent`, ...)
+- `/supabase/migrations` – database schema & routines (pgvector, triggers, etc.)
+- `/docs` – product/tech docs, project_status
+- `/tests` – unit/integration tests
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/a4155aa1-26b7-4b24-b772-82289a60f9e8) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+## License
+Proprietary – internal use for Tribeca Developers.

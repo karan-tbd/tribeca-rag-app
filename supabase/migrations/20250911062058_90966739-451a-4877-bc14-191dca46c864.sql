@@ -1,7 +1,21 @@
--- Create storage bucket for documents (idempotent)
-INSERT INTO storage.buckets (id, name, public)
-VALUES ('documents', 'documents', false)
-ON CONFLICT (id) DO NOTHING;
+-- Create storage bucket for documents (idempotent) – compatible with storage versions with/without `public` column
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM storage.buckets WHERE id = 'documents') THEN
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'storage' AND table_name = 'buckets' AND column_name = 'public'
+    ) THEN
+      INSERT INTO storage.buckets (id, name, public)
+      VALUES ('documents', 'documents', false)
+      ON CONFLICT (id) DO NOTHING;
+    ELSE
+      INSERT INTO storage.buckets (id, name)
+      VALUES ('documents', 'documents')
+      ON CONFLICT (id) DO NOTHING;
+    END IF;
+  END IF;
+END $$;
 
 -- Create storage policies for documents bucket (idempotent)
 DO $$

@@ -1,15 +1,25 @@
 -- Create private 'documents' bucket (idempotent) and per-user Storage RLS policies
 -- This migration is safe to re-run.
 
--- 1) Ensure bucket exists (private)
+-- 1) Ensure bucket exists (private) – compatible with storage versions with/without `public` column
 DO $$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM storage.buckets WHERE id = 'documents'
   ) THEN
-    INSERT INTO storage.buckets (id, name, public)
-    VALUES ('documents', 'documents', FALSE)
-    ON CONFLICT (id) DO NOTHING;
+    IF EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'storage' AND table_name = 'buckets' AND column_name = 'public'
+    ) THEN
+      INSERT INTO storage.buckets (id, name, public)
+      VALUES ('documents', 'documents', FALSE)
+      ON CONFLICT (id) DO NOTHING;
+    ELSE
+      INSERT INTO storage.buckets (id, name)
+      VALUES ('documents', 'documents')
+      ON CONFLICT (id) DO NOTHING;
+    END IF;
   END IF;
 END $$;
 
@@ -85,4 +95,5 @@ BEGIN
     );
   END IF;
 END $$;
+
 

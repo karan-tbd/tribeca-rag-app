@@ -9,7 +9,6 @@ max_rows = 1000
 
 [auth]
 enabled = true
-# ❌ no `auth.port` in current schema — remove it
 
 [auth.email]
 enable_signup = true
@@ -33,15 +32,16 @@ max_client_conn = 100
 
 [realtime]
 enabled = true
-# ❌ no `realtime.port` — remove it
 
 [studio]
 enabled = true
 port = 54323
 
-# ❌ Global [functions] table with `enabled/port` is invalid — remove it.
-# Define per-function blocks only:
+# Disable analytics to remove docker.sock warnings
+[analytics]
+enabled = false
 
+# Function-level configs
 [functions.process-document]
 verify_jwt = true
 
@@ -50,5 +50,4 @@ verify_jwt = true
 
 [edge_runtime]
 enabled = true
-# ❌ `edge_runtime.port` is invalid; use inspector_port instead if you want it
 inspector_port = 54326

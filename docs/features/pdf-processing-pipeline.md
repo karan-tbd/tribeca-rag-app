@@ -18,8 +18,8 @@ The PDF Processing Pipeline is a comprehensive system that transforms uploaded P
 - **Metadata Preservation**: Tracks overlap regions and chunk relationships
 
 ### 3. OpenAI Embedding Generation
-- **Model**: Uses agent's configured `embed_model` (e.g., text-embedding-3-small, text-embedding-3-large)
-- **Agent-Specific**: Each agent can use different embedding models for their documents
+- **Model**: Standardized on OpenAI `text-embedding-3-small` for now
+- **Agent Selection**: The agent's `embed_model` is stored but not used yet for embeddings
 - **Batch Processing**: Processes chunks in configurable batches (default: 5 concurrent)
 - **Retry Logic**: Exponential backoff for API failures
 - **Rate Limiting**: Respects OpenAI API limits
@@ -61,11 +61,11 @@ ALTER TABLE chunks ADD COLUMN
 ```typescript
 // Main processing flow
 1. Update document status to 'processing'
-2. Fetch document with agent configuration (embed_model, etc.)
+2. Fetch document metadata
 3. Download PDF from Supabase Storage
 4. Extract text using pdf.js (with fallback)
 5. Create semantic chunks with overlap
-6. Generate embeddings using agent's configured model
+6. Generate embeddings using default model (OpenAI text-embedding-3-small)
 7. Store chunks with metadata and embedding model info
 8. Update document status to 'processed'
 ```
@@ -106,26 +106,18 @@ MAX_CONCURRENT_CHUNKS=5      # Concurrent embedding requests
 ENABLE_PDF_PROCESSING: true
 ```
 
-### Agent-Based Configuration
+### Current Behavior and Roadmap
 
-The PDF processing pipeline uses the agent's configuration for embedding generation:
+- Current: Embeddings are generated with OpenAI `text-embedding-3-small` for all agents.
+- The `agents.embed_model` field is stored for future compatibility but does not affect ingestion or retrieval yet.
+- Roadmap: Pluggable provider+model selection per agent (OpenAI, Azure OpenAI, Cohere, Voyage, etc.) with automatic vector dimension handling.
 
 ```typescript
-// Agent configuration (from agents table)
-{
-  embed_model: "text-embedding-3-small",  // Used for document processing
-  gen_model: "gpt-4o-mini",               // Used for chat responses
-  k: 5,                                   // Number of chunks to retrieve
-  sim_threshold: 0.75,                    // Similarity threshold for retrieval
-  fail_safe_threshold: 0.5                // Fail-safe threshold for low confidence
-}
+// Today: embedding model is fixed to text-embedding-3-small
+const EMBEDDING_MODEL = "text-embedding-3-small";
+// The agent's embed_model is ignored for embeddings until multi-provider support lands.
 ```
 
-**Benefits of Agent-Based Configuration:**
-- **Flexibility**: Different agents can use different embedding models
-- **Consistency**: Documents are processed with the same model the agent will use for retrieval
-- **Optimization**: Agents can be optimized for specific use cases (e.g., code vs. documents)
-- **Cost Control**: Use smaller models for less critical agents, larger models for important ones
 
 ## Usage
 

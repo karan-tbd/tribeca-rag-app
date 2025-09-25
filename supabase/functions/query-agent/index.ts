@@ -1,6 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { getSupabaseAdmin, env } from "../_shared/supabase.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -22,11 +22,8 @@ serve(async (req) => {
       });
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const openaiKey = Deno.env.get('OPENAI_API_KEY')!;
-
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabase = getSupabaseAdmin();
+    const openaiKey = env('OPENAI_API_KEY')!;
 
     // Get agent configuration
     const { data: agent, error: agentError } = await supabase
@@ -45,7 +42,7 @@ serve(async (req) => {
 
     console.log('Processing query for agent:', agent.name);
 
-    // Generate query embedding for retrieval
+    // Generate query embedding for retrieval (robust to API errors)
     const queryEmbedding = await generateEmbedding(query, openaiKey);
 
     // Find relevant documents for this agent
@@ -65,9 +62,8 @@ serve(async (req) => {
       });
     }
 
-    // TODO: Implement vector similarity search
-    // For now, we'll use a simple keyword-based approach
-    const relevantChunks = await findRelevantChunks(documents, query, supabase);
+    // Vector similarity search over agent's documents
+    const relevantChunks = await findRelevantChunks(documents, queryEmbedding, supabase, agent);
 
     // Create query record
     const { data: queryRecord, error: queryError } = await supabase
@@ -109,17 +105,19 @@ serve(async (req) => {
       console.error('Failed to save answer:', answerError);
     }
 
-    // Save citations
-    for (const chunk of relevantChunks) {
-      await supabase.from('answer_citations').insert({
-        answer_id: answerRecord.id,
-        document_id: chunk.document_id,
-        version_id: chunk.version_id,
-        page_start: chunk.page_start,
-        page_end: chunk.page_end,
-        chunk_index: chunk.chunk_index,
-        sim_score: chunk.similarity || 0.5
-      });
+    // Save citations only if the answer was saved successfully
+    if (answerRecord?.id) {
+      for (const chunk of relevantChunks) {
+        await supabase.from('answer_citations').insert({
+          answer_id: answerRecord.id,
+          document_id: chunk.document_id,
+          version_id: chunk.version_id,
+          page_start: chunk.page_start,
+          page_end: chunk.page_end,
+          chunk_index: chunk.chunk_index,
+          sim_score: chunk.similarity || 0.5
+        });
+      }
     }
 
     return new Response(JSON.stringify({ 
@@ -136,76 +134,119 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error processing query:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    const message = (error as any)?.message || 'Internal Server Error';
+    return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 });
 
-async function findRelevantChunks(documents: any[], query: string, supabase: any) {
-  // Simple keyword-based retrieval for demo
-  const keywords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
-  
-  const chunks = [];
-  for (const doc of documents) {
-    const { data: docChunks } = await supabase
-      .from('chunks')
-      .select('*')
-      .eq('document_id', doc.id)
-      .limit(5);
-    
-    if (docChunks) {
-      chunks.push(...docChunks.map(c => ({ ...c, similarity: 0.5 })));
+async function findRelevantChunks(documents: any[], queryEmbedding: number[] | null, supabase: any, agent: any) {
+  try {
+    const docIds: string[] = (documents || []).map((d: any) => d.id).filter(Boolean);
+    if (!docIds.length) return [];
+    if (!Array.isArray(queryEmbedding) || queryEmbedding.length === 0) return [];
+
+    const match_count = typeof agent?.k === 'number' ? Math.max(1, Math.min(20, agent.k)) : 5;
+    const similarity_threshold = typeof agent?.sim_threshold === 'number' ? agent.sim_threshold : 0;
+
+    // Delegate vector similarity to Postgres via RPC
+    // Pass embedding as pgvector literal string for robust casting
+    const qvLiteral = `[${queryEmbedding.join(',')}]`;
+    const { data, error } = await supabase.rpc('match_chunks', {
+      query_embedding: qvLiteral as any,
+      doc_ids: docIds as any,
+      match_count,
+      similarity_threshold,
+    });
+
+    if (error) {
+      console.error('RPC match_chunks error:', error);
+      return [];
     }
+
+    return (data || []).map((r: any) => ({
+      ...r,
+      similarity: r.similarity,
+    }));
+  } catch (e) {
+    console.error('findRelevantChunks failed:', e);
+    return [];
   }
-  
-  return chunks.slice(0, 5); // Return top 5 chunks
 }
 
 async function generateAnswer(query: string, chunks: any[], agent: any, apiKey: string) {
-  const context = chunks.map(c => `Document ${c.document_id} (Page ${c.page_start}): [Content would be here]`).join('\n\n');
-  
-  const systemPrompt = agent.system_prompt || 
-    "You are a question-answering assistant. Answer strictly based on provided context excerpts. If insufficient evidence, say: \"I don't have enough evidence in the documents to answer confidently.\" Always cite sources with filename and page.";
-  
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: agent.gen_model || 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Context:\n${context}\n\nQuestion: ${query}` }
-      ],
-      temperature: 0.1,
-      max_tokens: 1000
-    }),
-  });
+  const context = chunks.map(c => `Document ${c.document_id} (Page ${c.page_start}-${c.page_end}): ${c.content ?? ''}`).join('\n\n');
 
-  const data = await response.json();
-  return {
-    text: data.choices[0].message.content,
-    confidence: 0.8 // TODO: Implement proper confidence scoring
-  };
+  const systemPrompt = agent.system_prompt ||
+    "You are a question-answering assistant. Answer strictly based on provided context excerpts. If insufficient evidence, say: \"I don't have enough evidence in the documents to answer confidently.\" Always cite sources with filename and page.";
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: agent.gen_model || 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `Context:\n${context}\n\nQuestion: ${query}` }
+        ],
+        temperature: 0.1,
+        max_tokens: 1000
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error('OpenAI chat error:', response.status, errText);
+      return {
+        text: "I'm having trouble generating a response right now.",
+        confidence: 0.3,
+      };
+    }
+
+    const data = await response.json();
+    return {
+      text: data?.choices?.[0]?.message?.content ?? "I couldn't generate a response.",
+      confidence: 0.8 // TODO: Implement proper confidence scoring
+    };
+  } catch (e) {
+    console.error('generateAnswer failed:', e);
+    return {
+      text: "I'm having trouble generating a response right now.",
+      confidence: 0.3,
+    };
+  }
 }
 
-async function generateEmbedding(text: string, apiKey: string): Promise<number[]> {
-  const response = await fetch('https://api.openai.com/v1/embeddings', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'text-embedding-3-small',
-      input: text,
-    }),
-  });
+async function generateEmbedding(text: string, apiKey: string): Promise<number[] | null> {
+  try {
+    const response = await fetch('https://api.openai.com/v1/embeddings', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'text-embedding-3-small',
+        input: text,
+      }),
+    });
 
-  const data = await response.json();
-  return data.data[0].embedding;
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error('OpenAI embeddings error:', response.status, errText);
+      return null;
+    }
+
+    const data = await response.json();
+    return data?.data?.[0]?.embedding ?? null;
+  } catch (e) {
+    console.error('generateEmbedding failed:', e);
+    return null;
+  }
 }

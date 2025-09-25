@@ -3,16 +3,9 @@
 // Reads the caller's Linear API token from public.users and performs a simple GraphQL query to test connectivity.
 // Expects JSON body: { user_id: string, projectId?: string }
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getSupabaseAdmin } from "../_shared/supabase.ts";
 
-const supabaseUrl = Deno.env.get("SUPABASE_URL");
-const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-
-if (!supabaseUrl || !supabaseServiceKey) {
-  throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars for edge function.");
-}
-
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+const supabase = getSupabaseAdmin();
 
 Deno.serve(async (req) => {
   try {

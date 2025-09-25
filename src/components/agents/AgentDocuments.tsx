@@ -145,10 +145,12 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
   };
 
   // Helper function to get processing progress
+  // Returns a number 0-100 for determinate states; undefined for indeterminate
   const getProcessingProgress = (document: Document) => {
     if (document.processing_status === 'processed') return 100;
-    if (document.processing_status === 'processing') return 50;
     if (document.processing_status === 'failed') return 0;
+    // Indeterminate while processing (we don't know total chunk count ahead of time)
+    if (document.processing_status === 'processing') return undefined as unknown as number;
     return 0;
   };
 
@@ -228,6 +230,9 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
 
     setUploading(true);
 
+    // Track uploaded storage path to clean up on DB failure
+    let uploadedPath: string | null = null;
+
     try {
       // Validate file type
       if (file.type !== "application/pdf") {
@@ -236,10 +241,25 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
         return;
       }
 
-      // Validate file size (10MB limit)
-      if (file.size > 10 * 1024 * 1024) {
-        toast.error("File size must be less than 10MB");
+      // Validate file size (50MB limit)
+      if (file.size > 50 * 1024 * 1024) {
+        toast.error("File size must be less than 50MB");
         clearFileInput();
+        return;
+      }
+
+      // Verify selected agent exists and belongs to the current user
+      const { data: agentRow, error: agentCheckError } = await supabase
+        .from("agents")
+        .select("id")
+        .eq("id", agentId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (agentCheckError) throw agentCheckError;
+      if (!agentRow) {
+        toast.error("Agent not found. Please save or re-select an agent before uploading.");
+        clearFileInput();
+        setUploading(false);
         return;
       }
 
@@ -252,6 +272,9 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
           upsert: false,
           contentType: file.type,
         });
+
+      // Mark that storage upload succeeded so we can cleanup on later failure
+      uploadedPath = path;
 
       if (storageError) throw storageError;
 
@@ -277,6 +300,12 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
 
       // Trigger document processing
       try {
+        // Optimistically add/update the document to show progress immediately
+        setDocuments((prev) => [
+          { ...(data as unknown as Document), processing_status: 'processing' },
+          ...prev,
+        ]);
+
         const { data: _processData, error: processError } = await supabase.functions.invoke("process-document", {
           body: { documentId: data.id },
         });
@@ -296,11 +325,25 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
         toast.error("Upload succeeded but processing failed to start");
       }
 
-      // Refresh documents list and clear file input
-      setDocuments((prev) => [data as unknown as Document, ...prev]);
+      // Clear file input (list updated optimistically above)
       clearFileInput();
     } catch (error: any) {
       console.error("Upload failed:", error);
+
+      // Cleanup any uploaded file if DB insert failed after storage upload
+      if (uploadedPath) {
+        try {
+          const { error: cleanupError } = await supabase.storage
+            .from("documents")
+            .remove([uploadedPath]);
+          if (cleanupError) {
+            console.warn("Failed to cleanup orphaned upload:", cleanupError);
+          }
+        } catch (cleanupEx) {
+          console.warn("Cleanup threw:", cleanupEx);
+        }
+      }
+
       toast.error(error?.message || "Upload failed");
     } finally {
       // Always reset uploading state, regardless of success or failure
@@ -459,14 +502,14 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
                   </div>
                 </div>
 
-                {/* Processing progress bar */}
+                {/* Processing progress indicator (indeterminate) */}
                 {document.processing_status === 'processing' && (
                   <div className="space-y-1">
                     <div className="flex justify-between text-xs text-muted-foreground">
                       <span>Processing document...</span>
-                      <span>{getProcessingProgress(document)}%</span>
+                      <span>Working…</span>
                     </div>
-                    <Progress value={getProcessingProgress(document)} className="h-2" />
+                    <Progress indeterminate className="h-2" />
                   </div>
                 )}
 

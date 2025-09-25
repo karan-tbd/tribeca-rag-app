@@ -2,7 +2,7 @@
 // Toggle these in build-time env or by editing for local development
 // In CI/Prod, prefer sourcing from environment and building conditionally if needed.
 
-import { TrendingUp } from "lucide-react";
+import { TrendingUp, TrendingUpDown } from "lucide-react";
 
 export const FEATURE_FLAGS = {
   // Track 1: Authentication
@@ -20,9 +20,9 @@ export const FEATURE_FLAGS = {
   ENABLE_VECTOR_STORAGE: false,
 
   // Track 4: Chat
-  ENABLE_CHAT_SESSIONS: false,
-  ENABLE_CHAT_UI: false,
-  ENABLE_CHAT_COMPLETION: false,
+  ENABLE_CHAT_SESSIONS: true,
+  ENABLE_CHAT_UI: true,
+  ENABLE_CHAT_COMPLETION: true,
 
   // Track 5: Global Docs
   ENABLE_GLOBAL_DOCS: false,

@@ -28,14 +28,6 @@ vi.mock("@/integrations/supabase/client", () => ({
   supabase: hoisted.supabaseImpl,
 }));
 
-// Mock supabase.channel to avoid real websocket/timers in tests
-(hoisted.supabaseImpl as any).channel = vi.fn(() => ({
-  on: vi.fn().mockReturnThis(),
-  subscribe: vi.fn(() => ({ unsubscribe: vi.fn() })),
-  unsubscribe: vi.fn(),
-}));
-
-
 import AgentDocuments from "@/components/agents/AgentDocuments";
 
 function setupDocumentsMock({
@@ -70,6 +62,17 @@ function setupDocumentsMock({
           }),
         }),
       };
+    }
+    if (table === "agents") {
+      return {
+        select: () => ({
+          eq: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: { id: "agent-1" }, error: null }),
+            }),
+          }),
+        }),
+      } as any;
     }
     throw new Error("unexpected table " + table);
   });
@@ -183,9 +186,9 @@ describe("AgentDocuments", () => {
 
     render(<AgentDocuments agentId="agent-1" />);
 
-    // Create a tiny file and override size to simulate >10MB
-    const file = new File([new ArrayBuffer(1)], "large.pdf", { type: "application/pdf" });
-    Object.defineProperty(file, "size", { value: 11 * 1024 * 1024 });
+    // Create a mock large file (over 50MB)
+    const largeContent = new Array(51 * 1024 * 1024).fill("a").join("");
+    const file = new File([largeContent], "large.pdf", { type: "application/pdf" });
 
     const fileInput = screen.getByRole("textbox", { hidden: true }) as HTMLInputElement;
     await userEvent.upload(fileInput, file);
@@ -194,7 +197,7 @@ describe("AgentDocuments", () => {
     await userEvent.click(uploadButton);
 
     await waitFor(() => {
-      expect(hoisted.toastObj.error).toHaveBeenCalledWith("File size must be less than 10MB");
+      expect(hoisted.toastObj.error).toHaveBeenCalledWith("File size must be less than 50MB");
     });
 
     // Verify button is re-enabled after validation error
@@ -354,5 +357,36 @@ describe("AgentDocuments", () => {
     await waitFor(() => {
       expect(hoisted.toastObj.error).toHaveBeenCalled();
     });
+  });
+
+  it("cleans up storage if DB insert fails after successful upload", async () => {
+    // Freeze time for deterministic storage path
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(1700000000000);
+
+    setupDocumentsMock({
+      documentsResult: { data: [], error: null },
+      uploadResult: { error: null },
+      insertResult: { data: null, error: new Error("FK violation") },
+    });
+
+    render(<AgentDocuments agentId="agent-1" />);
+
+    const file = new File(["pdf content"], "fail.pdf", { type: "application/pdf" });
+    const fileInput = screen.getByRole("textbox", { hidden: true }) as HTMLInputElement;
+    await userEvent.upload(fileInput, file);
+
+    const uploadButton = screen.getByRole("button", { name: /upload pdf/i });
+    await userEvent.click(uploadButton);
+
+    await waitFor(() => {
+      // Error toast should be called
+      expect(hoisted.toastObj.error).toHaveBeenCalled();
+      // Orphan cleanup should run
+      const storage = hoisted.supabaseImpl.storage.from();
+      expect(storage.remove).toHaveBeenCalledTimes(1);
+      expect(storage.remove).toHaveBeenCalledWith(["user-1/1700000000000-fail.pdf"]);
+    });
+
+    nowSpy.mockRestore();
   });
 });
