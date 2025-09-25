@@ -228,6 +228,9 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
 
     setUploading(true);
 
+    // Track uploaded storage path to clean up on DB failure
+    let uploadedPath: string | null = null;
+
     try {
       // Validate file type
       if (file.type !== "application/pdf") {
@@ -236,9 +239,9 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
         return;
       }
 
-      // Validate file size (10MB limit)
-      if (file.size > 10 * 1024 * 1024) {
-        toast.error("File size must be less than 10MB");
+      // Validate file size (50MB limit)
+      if (file.size > 50 * 1024 * 1024) {
+        toast.error("File size must be less than 50MB");
         clearFileInput();
         return;
       }
@@ -267,6 +270,9 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
           upsert: false,
           contentType: file.type,
         });
+
+      // Mark that storage upload succeeded so we can cleanup on later failure
+      uploadedPath = path;
 
       if (storageError) throw storageError;
 
@@ -316,6 +322,21 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
       clearFileInput();
     } catch (error: any) {
       console.error("Upload failed:", error);
+
+      // Cleanup any uploaded file if DB insert failed after storage upload
+      if (uploadedPath) {
+        try {
+          const { error: cleanupError } = await supabase.storage
+            .from("documents")
+            .remove([uploadedPath]);
+          if (cleanupError) {
+            console.warn("Failed to cleanup orphaned upload:", cleanupError);
+          }
+        } catch (cleanupEx) {
+          console.warn("Cleanup threw:", cleanupEx);
+        }
+      }
+
       toast.error(error?.message || "Upload failed");
     } finally {
       // Always reset uploading state, regardless of success or failure
