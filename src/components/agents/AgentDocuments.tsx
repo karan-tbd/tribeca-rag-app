@@ -145,10 +145,12 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
   };
 
   // Helper function to get processing progress
+  // Returns a number 0-100 for determinate states; undefined for indeterminate
   const getProcessingProgress = (document: Document) => {
     if (document.processing_status === 'processed') return 100;
-    if (document.processing_status === 'processing') return 50;
     if (document.processing_status === 'failed') return 0;
+    // Indeterminate while processing (we don't know total chunk count ahead of time)
+    if (document.processing_status === 'processing') return undefined as unknown as number;
     return 0;
   };
 
@@ -298,6 +300,12 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
 
       // Trigger document processing
       try {
+        // Optimistically add/update the document to show progress immediately
+        setDocuments((prev) => [
+          { ...(data as unknown as Document), processing_status: 'processing' },
+          ...prev,
+        ]);
+
         const { data: _processData, error: processError } = await supabase.functions.invoke("process-document", {
           body: { documentId: data.id },
         });
@@ -317,8 +325,7 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
         toast.error("Upload succeeded but processing failed to start");
       }
 
-      // Refresh documents list and clear file input
-      setDocuments((prev) => [data as unknown as Document, ...prev]);
+      // Clear file input (list updated optimistically above)
       clearFileInput();
     } catch (error: any) {
       console.error("Upload failed:", error);
@@ -495,14 +502,14 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
                   </div>
                 </div>
 
-                {/* Processing progress bar */}
+                {/* Processing progress indicator (indeterminate) */}
                 {document.processing_status === 'processing' && (
                   <div className="space-y-1">
                     <div className="flex justify-between text-xs text-muted-foreground">
                       <span>Processing document...</span>
-                      <span>{getProcessingProgress(document)}%</span>
+                      <span>Working…</span>
                     </div>
-                    <Progress value={getProcessingProgress(document)} className="h-2" />
+                    <Progress indeterminate className="h-2" />
                   </div>
                 )}
 
