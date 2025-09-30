@@ -1,6 +1,30 @@
 # Project Status — tribeca-rag-app
 
 Last updated: 2025-09-24
+## Current Sprint - PDF Processing Enhancement
+
+### 🔥 Critical: Robust PDF Processing Service
+**Status**: In Development
+**Priority**: P0 - Blocking document ingestion
+**Effort**: L (3-5 days)
+**Linear**: KAR-33 — Robust Multi-Library PDF Processing Service
+
+**Problem**: Current pdf.js implementation fails in edge runtime, often extracting metadata instead of content.
+
+**Solution**: Multi-library extraction service with automatic fallbacks:
+- [ ] Implement PDFExtractionService with 4 extraction libraries
+- [ ] Add confidence scoring and metadata detection
+- [ ] Integrate with existing document processing pipeline
+- [ ] Add comprehensive testing for various PDF types
+- [ ] Update monitoring and error handling
+
+**Impact**: Fixes core document ingestion reliability, unblocks RAG functionality.
+
+### Dependencies
+- Blocks: Document upload reliability
+- Enables: Improved user experience for document management
+- Related: RAG-6 (Document Upload & Processing)
+
 
 ## Executive Summary
 - Foundations are implemented and verified: Authentication (Google/Microsoft), RLS, Agent configuration + persistence, PDF upload and processing pipeline with pgvector.

@@ -5,6 +5,7 @@ import { getSupabaseAdmin, env } from "../_shared/supabase.ts";
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
 serve(async (req) => {
@@ -16,8 +17,12 @@ serve(async (req) => {
     const { query, agentId, sessionId, userId } = await req.json();
     
     if (!query || !agentId || !userId) {
-      return new Response(JSON.stringify({ error: 'Query, agent ID, and user ID required' }), {
-        status: 400,
+      console.warn('Invalid request payload', { hasQuery: !!query, hasAgentId: !!agentId, hasUserId: !!userId });
+      return new Response(JSON.stringify({
+        error: 'Query, agent ID, and user ID required',
+        answer: "I couldn't process your request because some fields were missing. Please try again."
+      }), {
+        status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -34,8 +39,12 @@ serve(async (req) => {
       .single();
 
     if (agentError || !agent) {
-      return new Response(JSON.stringify({ error: 'Agent not found' }), {
-        status: 404,
+      console.warn('Agent not found or not accessible', { agentId, userId, agentError });
+      return new Response(JSON.stringify({
+        error: 'Agent not found',
+        answer: "The selected agent could not be found. Please select a different agent or try again."
+      }), {
+        status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -43,7 +52,10 @@ serve(async (req) => {
     console.log('Processing query for agent:', agent.name);
 
     // Generate query embedding for retrieval (robust to API errors)
+    const tEmbed0 = Date.now();
     const queryEmbedding = await generateEmbedding(query, openaiKey);
+    const embedMs = Date.now() - tEmbed0;
+    console.log('Timing: embedding_ms=', embedMs);
 
     // Find relevant documents for this agent
     const { data: documents } = await supabase
@@ -51,6 +63,10 @@ serve(async (req) => {
       .select('id, title')
       .eq('agent_id', agentId)
       .eq('user_id', userId);
+
+    // Map for document titles (for citations)
+    const docTitleById = new Map<string, string>((documents || []).map((d: any) => [d.id, d.title]));
+
 
     if (!documents || documents.length === 0) {
       return new Response(JSON.stringify({ 
@@ -63,7 +79,10 @@ serve(async (req) => {
     }
 
     // Vector similarity search over agent's documents
+    const tRetrieval0 = Date.now();
     const relevantChunks = await findRelevantChunks(documents, queryEmbedding, supabase, agent);
+    const retrievalMs = Date.now() - tRetrieval0;
+    console.log('Timing: retrieval_ms=', retrievalMs, 'k=', agent?.k, 'sim_threshold=', agent?.sim_threshold, 'chunks=', relevantChunks?.length ?? 0);
 
     // Create query record
     const { data: queryRecord, error: queryError } = await supabase
@@ -79,14 +98,54 @@ serve(async (req) => {
 
     if (queryError) {
       console.error('Failed to create query record:', queryError);
-      return new Response(JSON.stringify({ error: 'Failed to record query' }), {
-        status: 500,
+      return new Response(JSON.stringify({
+        error: 'Failed to record query',
+        answer: "I couldn't save your query, but I can still provide a best-effort answer.",
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // If no relevant chunks found, avoid open-ended answering; return grounded fallback
+    if (!relevantChunks || relevantChunks.length === 0) {
+      const fallback = {
+        text: "I don't have enough evidence in the documents to answer confidently.",
+        confidence: 0.3,
+      };
+      // Best-effort save of fallback answer (non-blocking)
+      try {
+        const { data: answerRecord } = await supabase
+          .from('answers')
+          .insert({
+            text: fallback.text,
+            query_id: queryRecord.id,
+            session_id: sessionId,
+            confidence: fallback.confidence,
+            fail_safe_triggered: true,
+          })
+          .select()
+          .single();
+        if (answerRecord?.id) {
+          console.log('Saved fallback grounded answer for empty retrieval');
+        }
+      } catch (e) {
+        console.warn('Failed to save fallback answer', e);
+      }
+      return new Response(JSON.stringify({
+        answer: fallback.text,
+        confidence: fallback.confidence,
+        citations: []
+      }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
     // Generate answer using LLM
+    const tLlm0 = Date.now();
     const answer = await generateAnswer(query, relevantChunks, agent, openaiKey);
+    const llmMs = Date.now() - tLlm0;
+    console.log('Timing: llm_ms=', llmMs, 'answer_tokens_est=', (answer.text || '').length);
 
     // Save answer
     const { data: answerRecord, error: answerError } = await supabase
@@ -120,13 +179,15 @@ serve(async (req) => {
       }
     }
 
-    return new Response(JSON.stringify({ 
+    return new Response(JSON.stringify({
       answer: answer.text,
       confidence: answer.confidence,
       citations: relevantChunks.map(c => ({
         documentId: c.document_id,
+        documentTitle: docTitleById.get(c.document_id) || null,
         pageStart: c.page_start,
-        pageEnd: c.page_end
+        pageEnd: c.page_end,
+        similarity: c.similarity ?? null
       }))
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -135,8 +196,11 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error processing query:', error);
     const message = (error as any)?.message || 'Internal Server Error';
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
+    return new Response(JSON.stringify({
+      error: message,
+      answer: "Something went wrong processing your request. Please try again."
+    }), {
+      status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
@@ -149,7 +213,7 @@ async function findRelevantChunks(documents: any[], queryEmbedding: number[] | n
     if (!Array.isArray(queryEmbedding) || queryEmbedding.length === 0) return [];
 
     const match_count = typeof agent?.k === 'number' ? Math.max(1, Math.min(20, agent.k)) : 5;
-    const similarity_threshold = typeof agent?.sim_threshold === 'number' ? agent.sim_threshold : 0;
+    const similarity_threshold = typeof agent?.sim_threshold === 'number' ? agent.sim_threshold : 0.75;
 
     // Delegate vector similarity to Postgres via RPC
     // Pass embedding as pgvector literal string for robust casting

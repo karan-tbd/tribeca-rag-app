@@ -1,7 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getSupabaseAdmin, env } from "../_shared/supabase.ts";
-import * as pdfjsLib from 'https://esm.sh/pdfjs-dist@3.11.174/build/pdf.mjs';
+import { extractPdfWithFallback } from "../_shared/pdf-extraction-service.ts";
 
 
 // Deno types for local TS tooling; provided at runtime in Supabase Edge Functions
@@ -90,10 +90,12 @@ serve(async (req: Request) => {
     }
 
 
-    // Extract text from PDF using pdf.js (fallback to .text() if needed)
-    const text = await extractPdfText(fileData);
+    // Extract text from PDF using multi-library service with fallbacks
+    const extraction = await extractPdfWithFallback(fileData);
+    console.log(`Extraction method=${extraction.method} confidence=${extraction.confidence.toFixed(2)}`);
+    const text = extraction.text || '';
     const maxChunk = Number(Deno.env.get('MAX_CHUNK_SIZE') ?? '1000');
-    const chunks = chunkText(text || '', maxChunk);
+    const chunks = chunkText(text, maxChunk);
 
     if (chunks.length === 0) {
       console.warn('No text extracted from document; aborting processing');
@@ -200,35 +202,7 @@ serve(async (req: Request) => {
     });
   }
 
-async function extractPdfText(fileData: Blob): Promise<string> {
-  try {
-    const ab = await fileData.arrayBuffer();
-    const uint8 = new Uint8Array(ab);
-    try {
-      // Disable worker in Edge runtime context
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if ((pdfjsLib as any).GlobalWorkerOptions) {
-        (pdfjsLib as any).GlobalWorkerOptions.workerSrc = '';
-      }
-    } catch (_) {}
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const loadingTask = (pdfjsLib as any).getDocument({ data: uint8, useSystemFonts: true, isEvalSupported: false });
-    const pdf = await loadingTask.promise;
-    let text = '';
-    for (let p = 1; p <= pdf.numPages; p++) {
-      const page = await pdf.getPage(p);
-      const content = await page.getTextContent();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const pageText = (content.items || []).map((it: any) => (it && (it.str ?? ''))).join(' ');
-      text += pageText + '\n';
-    }
-    try { await (pdf as any).cleanup?.(); } catch (_) {}
-    return text.trim();
-  } catch (e) {
-    console.warn('PDF.js extraction failed, falling back to blob.text()', e);
-    try { return await fileData.text(); } catch { return ''; }
-  }
-}
+
 
 });
 

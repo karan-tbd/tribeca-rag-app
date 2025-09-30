@@ -1,0 +1,42 @@
+{
+  "key": "KAR-33",
+  "title": "Robust Multi-Library PDF Processing Service",
+  "type": "Feature",
+  "epic": "EPIC-2",
+  "priority": "High",
+  "status": "In Progress",
+  "labels": ["backend", "document-processing", "edge-runtime"],
+  "assignee": "engineering-team",
+  "estimate": "L (5 points)",
+  "description": "Implement robust PDF text extraction service with multiple library fallbacks to replace failing pdf.js implementation in edge runtime.",
+  "acceptance_criteria": [
+    "✅ PDF text extraction success rate >95%",
+    "✅ Multi-library fallback system (pdf.js → pdf-parse → MuPDF → Poppler)",
+    "✅ Confidence scoring system to detect metadata vs content",
+    "✅ Edge runtime compatibility for all libraries",
+    "✅ Comprehensive error handling and logging",
+    "✅ Performance maintained or improved",
+    "✅ All existing tests passing"
+  ],
+  "technical_notes": [
+    "Create PDFExtractionService in _shared/pdf-extraction-service.ts",
+    "Implement confidence scoring based on text patterns",
+    "Add metadata detection to avoid processing PDF internals",
+    "Update process-document function to use new service",
+    "Add monitoring for extraction method success rates"
+  ],
+  "risk_assessment": "Medium - Multiple external libraries, edge runtime constraints",
+  "dependencies": [],
+  "blocks": ["RAG-6", "RAG-8"],
+  "custom_fields": {
+    "Component": "document-processing",
+    "Risk": "Medium",
+    "Effort": "L"
+  },
+  "links": {
+    "linear_url": "https://linear.app/karans/issue/KAR-33/robust-multi-library-pdf-processing-service",
+    "branch": "kmandalam/kar-33-robust-multi-library-pdf-processing-service"
+  }
+}
+
+
