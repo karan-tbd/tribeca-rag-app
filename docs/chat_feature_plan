@@ -1,0 +1,128 @@
+# Chat Feature Implementation Tasks
+
+## 🔥 Critical Path (Blocking Chat Functionality)
+
+### 1. Fix `query-agent` Edge Function
+**Status**: Broken (non-2xx responses)
+**Priority**: P0 - Immediate
+**Effort**: S (1-2 days)
+
+- [ ] Diagnose function logs and error responses
+- [ ] Validate payload contract and environment variables
+- [ ] Fix authentication/authorization issues
+- [ ] Add proper error handling and logging
+- [ ] Test with integration tests
+
+### 2. Implement Vector Retrieval Integration (KAR-14)
+**Status**: Not implemented
+**Priority**: P0 - Critical
+**Effort**: L (3-5 days)
+
+- [ ] Build pgvector similarity search service
+- [ ] Implement top-k chunk retrieval by relevance
+- [ ] Add namespace isolation (user_id:agent_id)
+- [ ] Connect retrieval to `query-agent` function
+- [ ] Add retrieval performance logging
+
+### 3. Build Prompt Assembly Engine (KAR-17)
+**Status**: Not implemented  
+**Priority**: P0 - Critical
+**Effort**: XL (5-8 days)
+
+- [ ] Implement session summary generation logic
+- [ ] Build context assembly pipeline (system + summary + turns + RAG)
+- [ ] Add token counting and 8K budget management
+- [ ] Create prompt template system with variable substitution
+- [ ] Add summary update detection (only when new cited content)
+- [ ] Implement graceful degradation for token limits
+
+## 🎨 User Experience Enhancements
+
+### 4. Session Summary System
+**Status**: Table exists, logic missing
+**Priority**: P1 - High
+**Effort**: M (2-3 days)
+
+- [ ] Create summary generation from cited responses
+- [ ] Implement summary update triggers
+- [ ] Add context reset functionality (new session + termination summary)
+- [ ] Build session title auto-generation from first message
+
+### 5. Enhanced Chat UI (KAR-18)
+**Status**: Basic UI exists, missing key features
+**Priority**: P1 - High  
+**Effort**: L (3-5 days)
+
+- [ ] Add citations display with clickable document references
+- [ ] Implement confidence score indicators with color coding
+- [ ] Add loading states for RAG retrieval and LLM processing
+- [ ] Improve error handling with retry options
+- [ ] Add message export functionality
+- [ ] Implement keyboard shortcuts (Enter to send, etc.)
+
+## 🔬 Intelligence & Quality
+
+### 6. Confidence Scoring System (KAR-13)
+**Status**: Not implemented
+**Priority**: P2 - Medium
+**Effort**: M (2-3 days)
+
+- [ ] Implement heuristic evaluators (similarity scores, coverage)
+- [ ] Add LLM judge for faithfulness evaluation
+- [ ] Build confidence aggregation algorithm
+- [ ] Add fail-safe responses for low confidence (<50%)
+- [ ] Display confidence warnings for medium confidence (<80%)
+
+### 7. Query/Answer Logging Enhancement (KAR-14)
+**Status**: Basic logging exists
+**Priority**: P2 - Medium
+**Effort**: S (1-2 days)
+
+- [ ] Add latency tracking for each pipeline stage
+- [ ] Log token usage (input/output) for cost tracking
+- [ ] Store evaluation metrics in `evals` table
+- [ ] Add citation tracking in `citations` table
+
+## 📊 Monitoring & Analytics
+
+### 8. Chat Analytics Dashboard
+**Status**: Not implemented
+**Priority**: P3 - Low
+**Effort**: M (2-3 days)
+
+- [ ] Session metrics (length, turns, completion rate)
+- [ ] Query success rate and confidence distribution
+- [ ] Token usage and cost tracking
+- [ ] Popular queries and failure analysis
+
+## 🧪 Testing & Quality Assurance
+
+### 9. Chat Integration Tests
+**Status**: Missing
+**Priority**: P1 - High
+**Effort**: M (2-3 days)
+
+- [ ] End-to-end chat flow tests
+- [ ] Session management and summary generation tests
+- [ ] Vector retrieval and prompt assembly tests
+- [ ] Confidence scoring and fail-safe tests
+- [ ] Error handling and edge case tests
+
+## 📅 Recommended Implementation Order
+
+**Week 1**: Fix Critical Path
+1. Fix `query-agent` function (Days 1-2)
+2. Implement vector retrieval (Days 3-5)
+
+**Week 2**: Complete Core Chat
+3. Build prompt assembly engine (Days 1-5)
+
+**Week 3**: Polish & Intelligence  
+4. Session summary system (Days 1-3)
+5. Enhanced chat UI (Days 4-5)
+
+**Week 4**: Quality & Monitoring
+6. Confidence scoring system (Days 1-3)
+7. Integration tests (Days 4-5)
+
+**Total Effort**: ~20-25 days (4-5 weeks with 1 developer)

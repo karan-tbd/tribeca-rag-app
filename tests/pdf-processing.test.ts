@@ -257,7 +257,7 @@ describe('PDF Processing Pipeline', () => {
         document_id: 'test-doc-id',
         version_id: 'test-version-id',
         content: 'Test chunk content',
-        embedding: JSON.stringify(mockEmbedding),
+        embedding: mockEmbedding,
         chunk_index: 0,
         token_count: 4,
         embedding_model: agentEmbeddingModel, // Store agent's configured model

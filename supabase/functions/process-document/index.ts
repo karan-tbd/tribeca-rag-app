@@ -1,7 +1,8 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getSupabaseAdmin, env } from "../_shared/supabase.ts";
-import { extractPdfWithFallback } from "../_shared/pdf-extraction-service.ts";
+import { extractPdfWithFallback, scoreExtractionText } from "../_shared/pdf-extraction-service.ts";
+import { getChunkingParams, chunkTextTokenOverlap } from "../_shared/chunking.ts";
 
 
 // Deno types for local TS tooling; provided at runtime in Supabase Edge Functions
@@ -57,26 +58,20 @@ serve(async (req: Request) => {
       if (statusErr) console.warn('Failed to update status to processing', statusErr);
     }
 
-    // Download file from storage
-    const { data: fileData, error: downloadError } = await supabase.storage
-      .from('documents')
-      .download(doc.storage_path);
-
-    if (downloadError || !fileData) {
-      console.error('Failed to download file:', downloadError);
-      {
-        const { error: statusErr } = await supabase.rpc('update_document_processing_status', { doc_id: documentId, status: 'failed', error_msg: 'Failed to download file' });
-        if (statusErr) console.warn('Failed to update status to failed', statusErr);
-      }
-      return new Response(JSON.stringify({ success: false, error: 'Failed to download file' }), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    // Attempt to download from Storage if we have a storage_path; otherwise defer to chunks-fallback
+    let fileData: Blob | null = null;
+    let downloadError: any = null;
+    if (doc.storage_path && String(doc.storage_path).trim().length > 0) {
+      const resp = await supabase.storage.from('documents').download(doc.storage_path);
+      fileData = resp.data as any;
+      downloadError = resp.error;
+    } else {
+      downloadError = { message: 'No storage_path set on document; will try chunks-fallback' };
     }
 
-    // Enforce backend size limit (10MB)
+    // If we got a file, enforce backend size limit (10MB)
     const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
-    if (fileData.size > MAX_UPLOAD_BYTES) {
+    if (fileData && fileData.size > MAX_UPLOAD_BYTES) {
       try {
         const { error: statusErr } = await supabase.rpc('update_document_processing_status', {
           doc_id: documentId, status: 'failed', error_msg: 'File size exceeds 10MB'
@@ -90,14 +85,71 @@ serve(async (req: Request) => {
     }
 
 
-    // Extract text from PDF using multi-library service with fallbacks
-    const extraction = await extractPdfWithFallback(fileData);
-    console.log(`Extraction method=${extraction.method} confidence=${extraction.confidence.toFixed(2)}`);
-    const text = extraction.text || '';
-    const maxChunk = Number(Deno.env.get('MAX_CHUNK_SIZE') ?? '1000');
-    const chunks = chunkText(text, maxChunk);
+    // Extract text
+    let text = '';
+    let method = 'unknown';
+    let confidence = 0;
 
-    if (chunks.length === 0) {
+    if (fileData) {
+      // Primary path: extract from downloaded file
+      const extraction = await extractPdfWithFallback(fileData);
+      confidence = Number(extraction.confidence ?? 0);
+      method = extraction.method ?? 'unknown';
+      console.log(`[extract] method=${method} confidence=${confidence.toFixed(2)}`);
+      const textRaw = extraction.text || '';
+      const sampleBefore = textRaw.slice(0, 200);
+      text = textRaw.replace(/\u0000/g, '');
+      const sampleAfter = text.slice(0, 200);
+      console.log(`[extract] sample before sanitize: ${JSON.stringify(sampleBefore)}`);
+      console.log(`[extract] sample after sanitize:  ${JSON.stringify(sampleAfter)}`);
+    } else {
+      // Fallback path: reconstruct text from existing chunks if download failed or storage_path missing
+      console.warn('Download failed or no storage_path; using chunks-fallback', downloadError);
+      const { data: existing, error: chunksErr } = await supabase
+        .from('chunks')
+        .select('content, chunk_index')
+        .eq('document_id', documentId)
+        .order('chunk_index', { ascending: true });
+      if (chunksErr) {
+        console.error('Chunks fallback failed (query error):', chunksErr);
+        const { error: statusErr } = await supabase.rpc('update_document_processing_status', { doc_id: documentId, status: 'failed', error_msg: 'Failed to download file and no chunks available' });
+        if (statusErr) console.warn('Failed to set failed status after chunksErr', statusErr);
+        return new Response(JSON.stringify({ success: false, error: 'Failed to download file' }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const combinedRaw = (existing ?? []).map((r: any) => r?.content ?? '').join('\n');
+      const sampleBefore = combinedRaw.slice(0, 200);
+      text = (combinedRaw || '').replace(/\u0000/g, '');
+      const sampleAfter = text.slice(0, 200);
+      console.log(`[fallback-chunks] sample before sanitize: ${JSON.stringify(sampleBefore)}`);
+      console.log(`[fallback-chunks] sample after sanitize:  ${JSON.stringify(sampleAfter)}`);
+      method = 'chunks-fallback';
+      // Quality gate: avoid proceeding on metadata-heavy or too-short text
+      const { confidence: conf, metadataRatio, length } = scoreExtractionText(text);
+      confidence = conf;
+      const MIN_LEN = 50;
+      const MAX_META = 0.3;
+      const MIN_CONF = 0.4;
+      if (length < MIN_LEN || (metadataRatio ?? 1) > MAX_META || confidence < MIN_CONF) {
+        const msg = 'No readable text available (fallback is metadata-heavy or too short). Ensure storage_path is set and file is accessible.';
+        console.warn('[fallback-chunks] quality gate failed:', { length, metadataRatio, confidence });
+        const { error: statusErr } = await supabase.rpc('update_document_processing_status', { doc_id: documentId, status: 'failed', error_msg: msg });
+        if (statusErr) console.warn('Failed to set failed status after fallback quality gate', statusErr);
+        return new Response(JSON.stringify({ success: false, error: msg }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    const { maxTokens, overlapTokens } = getChunkingParams();
+    console.log(`[chunking] params tokens=${maxTokens} overlap=${overlapTokens}`);
+    const chunkObjs = chunkTextTokenOverlap(text, maxTokens, overlapTokens);
+    console.log(`[chunking] created=${chunkObjs.length}`);
+
+    if (chunkObjs.length === 0) {
       console.warn('No text extracted from document; aborting processing');
       {
         const { error: statusErr } = await supabase.rpc('update_document_processing_status', { doc_id: documentId, status: 'failed', error_msg: 'No extractable text found in file' });
@@ -109,7 +161,7 @@ serve(async (req: Request) => {
       });
     }
 
-    console.log(`Extracted ${chunks.length} chunks from document`);
+    console.log(`Extracted ${chunkObjs.length} chunks from document`);
 
     // Create document version
     const { data: version, error: versionError } = await supabase
@@ -135,11 +187,11 @@ serve(async (req: Request) => {
     }
 
     // Process chunks and generate embeddings
-    for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i];
+    for (let i = 0; i < chunkObjs.length; i++) {
+      const c = chunkObjs[i];
 
       // Generate embedding with robust fallback
-      const embedding = await generateEmbedding(chunk, openaiKey, embedModel);
+      const embedding = await generateEmbedding(c.content, openaiKey, embedModel);
 
       // Save chunk (include content + embedding + status)
       await supabase.from('chunks').insert({
@@ -147,15 +199,17 @@ serve(async (req: Request) => {
         version_id: version.id,
         page_start: 1, // TODO: extract actual page numbers
         page_end: 1,
-        chunk_index: i,
-        token_count: Math.ceil(chunk.length / 4), // rough estimate
-        content: chunk,
+        chunk_index: c.index,
+        token_count: c.tokenCount,
+        content: c.content,
+        chunk_overlap_start: c.overlapStart,
+        chunk_overlap_end: c.overlapEnd,
         embedding,
         processing_status: 'processed',
         embedding_model: embedModel
       });
 
-      console.log(`Processed chunk ${i + 1}/${chunks.length}`);
+      console.log(`Processed chunk ${i + 1}/${chunkObjs.length}`);
     }
 
     // Update document latest version
@@ -178,7 +232,7 @@ serve(async (req: Request) => {
 
     return new Response(JSON.stringify({
       success: true,
-      chunksProcessed: chunks.length,
+      chunksProcessed: chunkObjs.length,
       versionId: version.id
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -205,31 +259,6 @@ serve(async (req: Request) => {
 
 
 });
-
-function chunkText(text: string, maxLength: number): string[] {
-  const chunks = [];
-  let start = 0;
-
-  while (start < text.length) {
-    let end = start + maxLength;
-
-    // Try to break at sentence boundaries
-    if (end < text.length) {
-      const lastDot = text.lastIndexOf('.', end);
-      const lastNewline = text.lastIndexOf('\n', end);
-      const breakPoint = Math.max(lastDot, lastNewline);
-
-      if (breakPoint > start + maxLength / 2) {
-        end = breakPoint + 1;
-      }
-    }
-
-    chunks.push(text.slice(start, end).trim());
-    start = end;
-  }
-
-  return chunks.filter(chunk => chunk.length > 0);
-}
 
 async function generateEmbedding(text: string, apiKey: string, model: string): Promise<number[]> {
   try {

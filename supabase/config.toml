@@ -41,6 +41,10 @@ port = 54323
 [analytics]
 enabled = false
 
+# Disable storage since we're using direct processing
+[storage]
+enabled = true
+
 # Function-level configs
 [functions.process-document]
 verify_jwt = true

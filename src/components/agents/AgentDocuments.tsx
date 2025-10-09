@@ -75,31 +75,36 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
     loadDocuments();
 
     // Set up real-time subscription for document status updates
-    const subscription = supabase
-      .channel('document_changes')
+    const channel = supabase.channel(`documents_changes_${agentId}`)
+      // Listen for both INSERT and UPDATE so the list appears immediately and updates live
       .on(
         'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'documents',
-          filter: `agent_id=eq.${agentId}`
-        },
+        { event: 'INSERT', schema: 'public', table: 'documents', filter: `agent_id=eq.${agentId}` },
         (payload) => {
-          console.log('Document updated:', payload);
+          console.log('Document inserted:', payload)
+          setDocuments(prev => {
+            const exists = prev.some(d => d.id === (payload.new as any).id)
+            return exists ? prev : [{ ...(payload.new as any) }, ...prev]
+          })
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'documents', filter: `agent_id=eq.${agentId}` },
+        (payload) => {
+          console.log('Document updated:', payload)
           setDocuments(prev =>
-            prev.map(doc =>
-              doc.id === payload.new.id
-                ? { ...doc, ...payload.new }
-                : doc
-            )
-          );
+            prev.map(doc => doc.id === (payload.new as any).id ? { ...doc, ...(payload.new as any) } : doc)
+          )
         }
       )
       .subscribe();
 
+    const subscription = channel;
+
     return () => {
-      subscription.unsubscribe();
+      try { subscription.unsubscribe(); } catch (_) {}
+      try { supabase.removeChannel(channel); } catch (_) {}
     };
   }, [user, agentId]);
 
@@ -230,9 +235,6 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
 
     setUploading(true);
 
-    // Track uploaded storage path to clean up on DB failure
-    let uploadedPath: string | null = null;
-
     try {
       // Validate file type
       if (file.type !== "application/pdf") {
@@ -263,92 +265,102 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
         return;
       }
 
-      // Upload to storage
-      const path = `${user.id}/${Date.now()}-${file.name}`;
-      const { error: storageError } = await supabase.storage
-        .from("documents")
-        .upload(path, file, {
-          cacheControl: "3600",
-          upsert: false,
-          contentType: file.type,
-        });
+      // Convert file to base64 for direct processing
+      const fileContent = await fileToBase64(file);
 
-      // Mark that storage upload succeeded so we can cleanup on later failure
-      uploadedPath = path;
-
-      if (storageError) throw storageError;
-
-      // Create document record with initial processing status
+      // Create a placeholder document first so UI shows it immediately
+      const clientDocId = crypto.randomUUID();
       const title = file.name.replace(/\.[^.]+$/, "");
-      const { data, error: dbError } = await supabase
+      const { data: insertedDoc, error: insertErr } = await supabase
         .from("documents")
         .insert({
+          id: clientDocId,
+          title,
           user_id: user.id,
           agent_id: agentId,
-          storage_path: path,
-          title,
-          mime: file.type,
-          processing_status: 'pending',
-          chunk_count: 0
+          storage_path: '',
+          mime: 'application/pdf',
+          processing_status: 'processing',
+          chunk_count: 0,
+          latest_version: 0,
         })
         .select()
         .single();
+      if (insertErr) throw insertErr;
 
-      if (dbError) throw dbError;
+      // Optimistically add to UI
+      setDocuments(prev => [{ ...(insertedDoc as any) }, ...prev]);
 
-      toast.success(`${file.name} uploaded successfully`);
+	      // Upload the file to Supabase Storage and persist storage_path on the placeholder doc (best-effort)
+	      try {
+	        const safeName = file.name.replace(/\s+/g, '_');
+	        const storagePath = `documents/${user.id}/${Date.now()}-${safeName}`;
+	        const { error: uploadErr } = await supabase.storage
+	          .from('documents')
+	          .upload(storagePath, file, {
+	            cacheControl: '3600',
+	            upsert: true,
+	            contentType: file.type || 'application/pdf',
+	          });
+	        if (!uploadErr) {
+	          await supabase
+	            .from('documents')
+	            .update({ storage_path: storagePath })
+	            .eq('id', clientDocId)
+	            .eq('user_id', user.id);
+	        } else {
+	          console.warn('Storage upload failed (continuing with direct processing):', uploadErr);
+	        }
+	      } catch (e) {
+	        console.warn('Storage upload threw (continuing with direct processing):', e);
+	      }
 
-      // Trigger document processing
-      try {
-        // Optimistically add/update the document to show progress immediately
-        setDocuments((prev) => [
-          { ...(data as unknown as Document), processing_status: 'processing' },
-          ...prev,
-        ]);
 
-        const { data: _processData, error: processError } = await supabase.functions.invoke("process-document", {
-          body: { documentId: data.id },
-        });
+      // Kick off processing (Edge Function will update the row and Realtime will reflect it)
+      const { data: processResult, error: processError } = await supabase.functions.invoke("process-document-direct", {
+        body: {
+          documentId: clientDocId,
+          fileContent,
+          fileName: file.name,
+          userId: user.id,
+          agentId: agentId
+        },
+      });
 
-        if (processError) {
-          console.error("Processing invocation failed:", processError);
-          toast.error("Upload succeeded but processing failed to start");
-        } else {
-          if (ENABLE_PROCESSING_PROGRESS_TOASTS) {
-            toast.success("Document is being processed for search");
-          }
-          // Kick off progress toasts (auto-cleans up on processed/failed)
-          startProcessingToasts(data.id);
-        }
-      } catch (processError) {
-        console.error("Processing failed:", processError);
-        toast.error("Upload succeeded but processing failed to start");
+      if (processError) {
+        throw new Error(processError.message || "Processing failed");
       }
 
-      // Clear file input (list updated optimistically above)
+      if (!processResult?.success) {
+        throw new Error(processResult?.error || "Processing failed");
+      }
+
+      if (ENABLE_PROCESSING_PROGRESS_TOASTS) {
+        toast.success(`Processed: ${processResult.chunksProcessed} chunks using ${processResult.extractionMethod}`);
+      }
+
+      // Clear file input
       clearFileInput();
     } catch (error: any) {
       console.error("Upload failed:", error);
-
-      // Cleanup any uploaded file if DB insert failed after storage upload
-      if (uploadedPath) {
-        try {
-          const { error: cleanupError } = await supabase.storage
-            .from("documents")
-            .remove([uploadedPath]);
-          if (cleanupError) {
-            console.warn("Failed to cleanup orphaned upload:", cleanupError);
-          }
-        } catch (cleanupEx) {
-          console.warn("Cleanup threw:", cleanupEx);
-        }
-      }
-
       toast.error(error?.message || "Upload failed");
     } finally {
       // Always reset uploading state, regardless of success or failure
       setUploading(false);
     }
+  };
+
+  // Helper function to convert file to base64
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = (reader.result as string).split(',')[1]; // Remove data:application/pdf;base64, prefix
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
   };
 
   const handleDelete = async (document: Document) => {
@@ -359,14 +371,17 @@ export default function AgentDocuments({ agentId }: AgentDocumentsProps) {
     }
 
     try {
-      // Delete from storage
-      const { error: storageError } = await supabase.storage
-        .from("documents")
-        .remove([document.storage_path]);
-
-      if (storageError) {
-        console.error("Storage deletion failed:", storageError);
-        // Continue with database deletion even if storage fails
+      // Delete from storage only if we have a valid object key
+      if (document.storage_path && document.storage_path.trim().length > 0) {
+        const { error: storageError } = await supabase.storage
+          .from("documents")
+          .remove([document.storage_path]);
+        if (storageError) {
+          console.error("Storage deletion failed:", storageError);
+          // Continue with database deletion even if storage fails
+        }
+      } else {
+        console.warn("Skipping storage delete: empty storage_path for document", document.id);
       }
 
       // Delete from database

@@ -13,6 +13,8 @@ import { Info } from "lucide-react";
 
 import AgentDocuments from "./AgentDocuments";
 
+
+
 interface AgentConfigFormProps {
   agentId?: string | null;
   onSave?: () => void;
@@ -153,10 +155,15 @@ export default function AgentConfigForm({ agentId: propAgentId, onSave }: AgentC
           </div>
         </div>
         <Button type="submit">Save</Button>
-      </form>
 
-      {/* Documents Section */}
-      <AgentDocuments agentId={agentId} />
+      {/* Documents Section (visible when an agent is selected) */}
+      {agentId && (
+        <div className="mt-6">
+          <AgentDocuments agentId={agentId} />
+        </div>
+      )}
+
+      </form>
     </div>
   );
 }
